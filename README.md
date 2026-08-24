@@ -106,4 +106,6 @@ Backend και Admin δένονται μόνο σε `127.0.0.1` σκόπιμα. 
 
 Δείτε το ξεχωριστό πινακάκι/σημείωμα ασφαλείας που συνοδεύει αυτό το repository. Εν συντομία: το backend **δεν έχει ακόμα ενσωματωμένη authentication/authorization** στα API endpoints — οποιοσδήποτε έχει network πρόσβαση στο backend port μπορεί να καλέσει τα endpoints. Πριν από production χρήση εκτός ελεγχόμενου/απομονωμένου δικτύου, απαιτείται πρόσθετο επίπεδο πρόσβασης (VPN, reverse-proxy auth, ή built-in auth layer).
 
+Το πλάνο για το πώς θα προστεθεί ισχυρή ταυτοποίηση (authentication) και πιστοποίηση/εξουσιοδότηση (authorization) — JWT login, RBAC, MFA, προαιρετικό SSO — περιγράφεται αναλυτικά στο [`docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md`](docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md).
+
 Περισσότερα τεχνικά στοιχεία στο [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) και [`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md).
