@@ -1,0 +1,389 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  TECHNICIAN
+  SUPERVISOR
+}
+
+enum LocationStatus {
+  IN_RACK
+  ON_MACHINE
+  IN_REPAIR
+  IN_TRANSIT
+  UNKNOWN
+}
+
+enum OperationalStatus {
+  FUNCTIONAL
+  INSPECTION_REQUIRED
+  UNDER_REPAIR
+  OUT_OF_SERVICE
+  RETIRED
+}
+
+enum MachineStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  RETIRED
+}
+
+enum RackLocationType {
+  AVL
+  REP
+}
+
+enum MovementType {
+  CHARGE
+  DECHARGE
+  RACK_TRANSFER
+  REPAIR_INTAKE
+  REPAIR_RELEASE
+  STATUS_CHANGE
+  MANUAL_ADJUSTMENT
+}
+
+enum RepairStatus {
+  REPORTED
+  ASSIGNED
+  UNDER_REPAIR
+  COMPLETED
+  CANCELLED
+}
+
+enum RepairPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum RepairOutcome {
+  RETURNED_TO_SERVICE
+  OUT_OF_SERVICE
+  RETIRED
+  UNRESOLVED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  CHARGE
+  DECHARGE
+  REPAIR_REPORTED
+  REPAIR_ASSIGNED
+  REPAIR_COMPLETED
+  PHOTO_UPLOADED
+  STATUS_CHANGE
+  MANUAL_ADJUSTMENT
+}
+
+enum PhotoStorageProvider {
+  MINIO
+  FILESYSTEM
+}
+
+enum RepairPhotoStage {
+  FAULT_DECLARATION
+  REPAIR_COMPLETION
+}
+
+model User {
+  id                   String          @id @default(cuid())
+  username             String          @unique
+  email                String?         @unique
+  displayName          String?
+  role                 UserRole        @default(OPERATOR)
+  isActive             Boolean         @default(true)
+  deletedAt            DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  performedMovements   PadMovement[]   @relation("MovementPerformedBy")
+  reportedRepairs      Repair[]        @relation("RepairReportedBy")
+  assignedRepairs      Repair[]        @relation("RepairTechnician")
+  uploadedRepairPhotos RepairPhoto[]   @relation("RepairPhotoUploadedBy")
+  auditLogs            AuditLog[]      @relation("AuditLogUser")
+  responsibleMachines  Machine[]       @relation("MachineResponsibleOperator")
+  chargedSessions      ChargeSession[] @relation("ChargeSessionChargedBy")
+  dechargedSessions    ChargeSession[] @relation("ChargeSessionDechargedBy")
+
+  @@index([role])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model VacuumPad {
+  id                    String            @id @default(cuid())
+  code                  String            @unique
+  qrCode                String            @unique
+  serialNumber          String?           @unique
+  description           String?
+  dimensions            String?
+  type                  String?
+  netWeightKg           Float?
+  dimensionLengthMm     Int?
+  dimensionWidthMm      Int?
+  dimensionHeightMm     Int?
+  liftingCapacityKg     Float?
+  costEuro              Decimal?          @db.Decimal(10, 2)
+  receivedAt            DateTime?
+  locationStatus        LocationStatus    @default(UNKNOWN)
+  /// IN_USE is derived from ON_MACHINE plus a populated currentMachineId.
+  /// Availability is derived from FUNCTIONAL + IN_RACK + no current machine assignment.
+  operationalStatus     OperationalStatus @default(FUNCTIONAL)
+  currentRackLocationId String?
+  currentMachineId      String?
+  deletedAt             DateTime?
+  lastRepairAt          DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  currentRackLocation   RackLocation?     @relation("CurrentRackLocation", fields: [currentRackLocationId], references: [id])
+  currentMachine        Machine?          @relation("CurrentMachine", fields: [currentMachineId], references: [id])
+  movements             PadMovement[]
+  repairs               Repair[]
+  chargeSessions        ChargeSession[]
+
+  /// Active rack occupancy and active machine assignment need PostgreSQL partial unique indexes later.
+  @@index([locationStatus])
+  @@index([operationalStatus])
+  @@index([currentRackLocationId])
+  @@index([currentMachineId])
+  @@index([deletedAt])
+  @@index([createdAt])
+}
+
+model RackLocation {
+  id               String           @id @default(cuid())
+  code             String           @unique
+  qrCode           String           @unique
+  type             RackLocationType @default(AVL)
+  zone             String?
+  rack             String?
+  level            String?
+  slot             String?
+  label            String?
+  /// MVP uses single-slot behavior. Final active occupancy enforcement needs a PostgreSQL partial unique index.
+  capacity         Int              @default(1)
+  isActive         Boolean          @default(true)
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  currentPads      VacuumPad[]      @relation("CurrentRackLocation")
+  movementsFrom    PadMovement[]    @relation("MovementFromRack")
+  movementsTo      PadMovement[]    @relation("MovementToRack")
+  dechargeSessions ChargeSession[]
+
+  @@index([type])
+  @@index([zone])
+  @@index([rack])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model Machine {
+  id                    String          @id @default(cuid())
+  code                  String          @unique
+  qrCode                String          @unique
+  name                  String
+  description           String?
+  area                  String?
+  project               String?
+  status                MachineStatus   @default(ACTIVE)
+  responsibleOperatorId String?
+  deletedAt             DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  responsibleOperator   User?           @relation("MachineResponsibleOperator", fields: [responsibleOperatorId], references: [id])
+  currentPads           VacuumPad[]     @relation("CurrentMachine")
+  movementsFrom         PadMovement[]   @relation("MovementFromMachine")
+  movementsTo           PadMovement[]   @relation("MovementToMachine")
+  chargeSessions        ChargeSession[]
+
+  @@index([status])
+  @@index([responsibleOperatorId])
+  @@index([area])
+  @@index([project])
+  @@index([deletedAt])
+}
+
+model PadMovement {
+  id                        String             @id @default(cuid())
+  vacuumPadId               String
+  movementType              MovementType
+  fromRackLocationId        String?
+  toRackLocationId          String?
+  fromMachineId             String?
+  toMachineId               String?
+  previousLocationStatus    LocationStatus?
+  newLocationStatus         LocationStatus?
+  previousOperationalStatus OperationalStatus?
+  newOperationalStatus      OperationalStatus?
+  performedById             String?
+  deviceId                  String?
+  operatorName              String?
+  note                      String?
+  metadata                  Json?
+  createdAt                 DateTime           @default(now())
+  vacuumPad                 VacuumPad          @relation(fields: [vacuumPadId], references: [id])
+  fromRackLocation          RackLocation?      @relation("MovementFromRack", fields: [fromRackLocationId], references: [id])
+  toRackLocation            RackLocation?      @relation("MovementToRack", fields: [toRackLocationId], references: [id])
+  fromMachine               Machine?           @relation("MovementFromMachine", fields: [fromMachineId], references: [id])
+  toMachine                 Machine?           @relation("MovementToMachine", fields: [toMachineId], references: [id])
+  performedBy               User?              @relation("MovementPerformedBy", fields: [performedById], references: [id])
+
+  @@index([vacuumPadId, createdAt])
+  @@index([movementType])
+  @@index([performedById])
+  @@index([fromRackLocationId])
+  @@index([toRackLocationId])
+  @@index([fromMachineId])
+  @@index([toMachineId])
+  @@index([createdAt])
+}
+
+model Repair {
+  id                 String         @id @default(cuid())
+  code               String?        @unique
+  vacuumPadId        String
+  reportedById       String?
+  technicianId       String?
+  faultCatalogId     String?
+  status             RepairStatus   @default(REPORTED)
+  priority           RepairPriority @default(NORMAL)
+  problemDescription String
+  faultOtherText     String?
+  operatorName       String?
+  technicianNotes    String?
+  repairActions      String?
+  spareParts         String?
+  repairCost         Decimal?       @db.Decimal(10, 2)
+  outcome            RepairOutcome?
+  reportedAt         DateTime       @default(now())
+  assignedAt         DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  vacuumPad          VacuumPad      @relation(fields: [vacuumPadId], references: [id])
+  reportedBy         User?          @relation("RepairReportedBy", fields: [reportedById], references: [id])
+  technician         User?          @relation("RepairTechnician", fields: [technicianId], references: [id])
+  faultCatalog       FaultCatalog?  @relation(fields: [faultCatalogId], references: [id])
+  photos             RepairPhoto[]
+
+  /// One open repair per pad cannot be expressed fully in Prisma here and may need backend checks or a later PostgreSQL partial index.
+  @@index([vacuumPadId])
+  @@index([vacuumPadId, status])
+  @@index([status])
+  @@index([priority])
+  @@index([reportedById])
+  @@index([technicianId])
+  @@index([faultCatalogId])
+  @@index([reportedAt])
+  @@index([completedAt])
+}
+
+model RepairPhoto {
+  id               String               @id @default(cuid())
+  repairId         String
+  stage            RepairPhotoStage     @default(FAULT_DECLARATION)
+  objectKey        String               @unique
+  bucket           String
+  originalFilename String?
+  contentType      String?
+  sizeBytes        Int?
+  caption          String?
+  uploadedById     String?
+  operatorName     String?
+  storageProvider  PhotoStorageProvider @default(MINIO)
+  filesystemPath   String?
+  publicUrl        String?
+  createdAt        DateTime             @default(now())
+  repair           Repair               @relation(fields: [repairId], references: [id])
+  uploadedBy       User?                @relation("RepairPhotoUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([repairId, createdAt])
+  @@index([repairId, stage, createdAt])
+  @@index([stage])
+  @@index([uploadedById])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  action       AuditAction
+  entityType   String
+  entityId     String
+  userId       String?
+  deviceId     String?
+  operatorName String?
+  before       Json?
+  after        Json?
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+  user         User?       @relation("AuditLogUser", fields: [userId], references: [id])
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model FaultCatalog {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  label       String
+  description String?
+  severity    RepairPriority?
+  isActive    Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  deletedAt   DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  repairs     Repair[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@index([deletedAt])
+}
+
+model ChargeSession {
+  id                     String        @id @default(cuid())
+  vacuumPadId            String
+  machineId              String
+  chargedAt              DateTime
+  dechargedAt            DateTime?
+  dechargeRackLocationId String?
+  chargedById            String?
+  dechargedById          String?
+  chargeDeviceId         String?
+  dechargeDeviceId       String?
+  chargeOperatorName     String?
+  dechargeOperatorName   String?
+  note                   String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  vacuumPad              VacuumPad     @relation(fields: [vacuumPadId], references: [id])
+  machine                Machine       @relation(fields: [machineId], references: [id])
+  dechargeRackLocation   RackLocation? @relation(fields: [dechargeRackLocationId], references: [id])
+  chargedBy              User?         @relation("ChargeSessionChargedBy", fields: [chargedById], references: [id])
+  dechargedBy            User?         @relation("ChargeSessionDechargedBy", fields: [dechargedById], references: [id])
+
+  /// Open charge-session uniqueness needs PostgreSQL partial unique indexes where dechargedAt IS NULL.
+  @@index([vacuumPadId])
+  @@index([machineId])
+  @@index([dechargeRackLocationId])
+  @@index([chargedAt])
+  @@index([dechargedAt])
+  @@index([chargedById])
+  @@index([dechargedById])
+}

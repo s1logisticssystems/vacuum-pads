@@ -1,0 +1,40 @@
+# Node.js / JavaScript
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE / editor files
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local data / secrets
+**/serviceAccount*.json
+**/*service-account*.json
+backend/storage/uploads/
+data/
+volumes/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
