@@ -1,4 +1,4 @@
-export const DEFAULT_API_BASE_URL = 'http://vacuum.s1-logistics.com';
+export const DEFAULT_API_BASE_URL = 'https://vacuum-admin.s1-logistics.com/api';
 export const ADMIN_DEVICE_ID = 'admin-web';
 
 export type ApiPayload = Record<string, unknown>;
