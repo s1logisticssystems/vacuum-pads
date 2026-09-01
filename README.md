@@ -128,6 +128,14 @@ docs/BACKUP_AND_RESTORE.md
 
 Backend και Admin δένονται μόνο σε `127.0.0.1` σκόπιμα. Για πρόσβαση από το internet χρειάζεται reverse proxy ή tunnel (π.χ. Cloudflare Tunnel, nginx με TLS) που να προωθεί προς `127.0.0.1:3000` (backend) και `127.0.0.1:8080` (admin), και αντίστοιχη ενημέρωση των `CORS_ORIGIN` / `BACKEND_PUBLIC_URL` / `ADMIN_PUBLIC_URL` στο `.env.production`.
 
+## Παράδοση σε πελάτη
+
+Λίστα ελέγχου για την παράδοση — τι δίνεται, με ποια σειρά εγκαθίσταται, ποια έγγραφα συνοδεύουν, και τι πρέπει να παρέχει ο πελάτης:
+
+```text
+docs/HANDOVER.md
+```
+
 ## ⚠️ Σημαντικό για security review
 
 ### Ταυτοποίηση χρηστών ✅
