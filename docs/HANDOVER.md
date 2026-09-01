@@ -84,6 +84,7 @@
 | [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) | Εγκατάσταση, αναβαθμίσεις, επαναφορά έκδοσης |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Πώς συνδέονται τα μέρη και γιατί |
 | [`ADMIN_USER_GUIDE.md`](ADMIN_USER_GUIDE.md) | Κάθε οθόνη του περιβάλλοντος διαχείρισης, με εικόνες |
+| [`MOBILE_USER_GUIDE.md`](MOBILE_USER_GUIDE.md) | Κάθε οθόνη της εφαρμογής Android, με εικόνες |
 | Φάκελος τεχνικής αξιολόγησης | Τεχνολογίες, δικτυακή έκθεση, ευρήματα ασφαλείας |
 | [`AUTHENTICATION_AND_AUTHORIZATION_PLAN.md`](AUTHENTICATION_AND_AUTHORIZATION_PLAN.md) | Τι έχει υλοποιηθεί στην ταυτοποίηση και τι παραμένει προαιρετικό (MFA, SSO) |
 
