@@ -46,35 +46,70 @@ Browser (Admin UI)
 
 ## Γρήγορη εκκίνηση (Docker)
 
+Πέντε βήματα. Το μόνο που χρειάζεται να αποφασίσετε είναι οι δύο δημόσιες διευθύνσεις.
+
+### Βήμα 1 — Λήψη του κώδικα
+
 ```bash
 git clone git@github.com:s1logisticssystems/vacuum-pads.git
 cd vacuum-pads
-cp .env.production.example .env.production
 ```
 
-Ανοίξτε το `.env.production` και αντικαταστήστε **όλες** τις τιμές `CHANGE_ME_...` με πραγματικά, μοναδικά passwords/keys. Ρυθμίστε επίσης:
+### Βήμα 2 — Δημιουργία των ρυθμίσεων
 
-- `CORS_ORIGIN` — το/τα public domain(s) που θα εξυπηρετούν το Admin (π.χ. `https://vacuum-admin.example.com`)
-- `BACKEND_PUBLIC_URL` / `ADMIN_PUBLIC_URL` — τα public URLs του deployment
+Ένα script παράγει το αρχείο `.env.production` με έτοιμα, ισχυρά μυστικά:
 
-Το backend αρνείται να ξεκινήσει σε production αν λείπει κάποια τιμή, αν παραμένει `CHANGE_ME`, ή αν `CORS_ORIGIN=*`.
+```bash
+./scripts/init-env.sh
+```
 
-Build & εκκίνηση όλου του stack:
+Σε Windows:
+
+```powershell
+.\scripts\init-env.ps1
+```
+
+Θα σας ρωτήσει **μόνο** τις δύο δημόσιες διευθύνσεις — του περιβάλλοντος διαχείρισης και του API. Όλα τα υπόλοιπα (κωδικοί βάσης, στοιχεία αποθήκευσης, κλειδί υπογραφής) παράγονται αυτόματα και σωστά.
+
+> **Κρατήστε αντίγραφο του `.env.production` σε ασφαλές σημείο.** Περιέχει τον κωδικό της βάσης· αν χαθεί, η εφαρμογή δεν μπορεί να προσπελάσει τα δεδομένα της.
+
+Αν προτιμάτε να ορίσετε εσείς τις τιμές, δείτε τον χειροκίνητο τρόπο στο [`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md). Εκεί εξηγείται επίσης **τι ισχύει αν χρειαστεί να αλλάξετε κωδικούς αργότερα** — η PostgreSQL έχει συμπεριφορά που ξαφνιάζει.
+
+### Βήμα 3 — Εκκίνηση
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
-Αυτό ξεκινά 4 υπηρεσίες: `postgres`, `minio`, `migrate` (one-shot Prisma migration), `backend`, `admin`.
+Ξεκινούν τέσσερις υπηρεσίες (`postgres`, `minio`, `backend`, `admin`) αφού πρώτα εφαρμοστούν οι μεταβάσεις της βάσης.
 
-Έλεγχος υγείας:
+Έλεγχος:
 
 ```bash
 curl http://localhost:3000/health
 curl http://localhost:3000/health/database
 ```
 
-Admin UI: `http://localhost:8080` (ή το port που ορίσατε σε `ADMIN_HTTP_PORT`). Στο πρώτο άνοιγμα, από το γρανάζι (⚙) ρυθμίστε backend URL: `http://localhost:8080/api` (χρησιμοποιεί το ενσωματωμένο nginx proxy, same-origin, χωρίς ανάγκη CORS).
+### Βήμα 4 — Δημιουργία του πρώτου διαχειριστή
+
+**Απαραίτητο.** Χωρίς αυτό κανείς δεν μπορεί να συνδεθεί — κανένας λογαριασμός δεν έχει κωδικό σε νέα εγκατάσταση.
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production run --rm \
+  -e PASSWORD='βάλτε-έναν-ισχυρό-κωδικό' \
+  migrate npx tsx scripts/set-user-password.ts \
+  --username admin --role ADMIN --display-name "Διαχειριστής"
+```
+
+Αναλυτικά, μαζί με τη δημιουργία των υπόλοιπων χρηστών: [`docs/USER_MANAGEMENT.md`](docs/USER_MANAGEMENT.md).
+
+### Βήμα 5 — Πρόσβαση
+
+Ανοίξτε `http://localhost:8080` (ή τη θύρα που ορίσατε στο `ADMIN_HTTP_PORT`) και συνδεθείτε με τον λογαριασμό του βήματος 4.
+
+Για πρόσβαση από το δίκτυο ή το internet, στρέψτε τον reverse proxy σας στο `127.0.0.1:8080` (διαχείριση) και `127.0.0.1:3000` (API), με HTTPS.
+
+Αν το περιβάλλον διαχείρισης δεν βρίσκει τον διακομιστή, η διεύθυνση ρυθμίζεται από την ίδια την οθόνη σύνδεσης, στο **Ρυθμίσεις σύνδεσης**. Η τιμή αποθηκεύεται στον φυλλομετρητή, οπότε ορίζεται μία φορά ανά υπολογιστή.
 
 ### Αρχικά δεδομένα (προαιρετικό, μόνο για demo/δοκιμή)
 
