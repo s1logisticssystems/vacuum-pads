@@ -39,7 +39,43 @@ export class ApiError extends Error {
 }
 
 export class AdminApiClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly accessToken: string | null = null,
+  ) {}
+
+  login(username: string, password: string) {
+    return this.postJson('/auth/login', { username, password });
+  }
+
+  getCurrentUser() {
+    return this.get('/auth/me');
+  }
+
+  changeOwnPassword(currentPassword: string, newPassword: string) {
+    return this.postJson('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+  }
+
+  listUsers() {
+    return this.get('/users');
+  }
+
+  createUser(body: ApiPayload) {
+    return this.postJson('/users', body);
+  }
+
+  setUserPassword(id: string, password: string) {
+    return this.postJson(`/users/${encodeURIComponent(id)}/password`, {
+      password,
+    });
+  }
+
+  deleteUser(id: string) {
+    return this.delete(`/users/${encodeURIComponent(id)}`);
+  }
 
   getHealth() {
     return this.get('/health');
@@ -103,7 +139,7 @@ export class AdminApiClient {
   }
 
   getAdminEventsUrl() {
-    return `${normalizeBaseUrl(this.baseUrl)}/events/admin`;
+    return this.resolveUrl('/events/admin');
   }
 
   /**
@@ -123,7 +159,17 @@ export class AdminApiClient {
     }
 
     const suffix = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
-    return `${normalizeBaseUrl(this.baseUrl)}${suffix}`;
+    const url = `${normalizeBaseUrl(this.baseUrl)}${suffix}`;
+
+    // <img> and EventSource cannot carry an Authorization header, so the token
+    // travels as a query parameter for those requests only.
+    if (!this.accessToken) {
+      return url;
+    }
+
+    return `${url}${url.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(
+      this.accessToken,
+    )}`;
   }
 
   listMovements(
@@ -281,6 +327,20 @@ export class AdminApiClient {
     return this.request(path, { method: 'GET' }, allowedErrorStatuses);
   }
 
+  /** JSON body, for auth and user endpoints whose DTOs are not form-encoded. */
+  private postJson(path: string, body: ApiPayload) {
+    return this.request(
+      path,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      [],
+      { ...body, password: undefined, newPassword: undefined, currentPassword: undefined },
+    );
+  }
+
   private post(path: string, body: ApiPayload) {
     const payload = removeEmptyValues(body);
 
@@ -354,6 +414,10 @@ export class AdminApiClient {
     };
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
+
+    if (this.accessToken) {
+      headers.set('Authorization', `Bearer ${this.accessToken}`);
+    }
 
     let response: Response;
 

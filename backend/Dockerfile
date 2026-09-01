@@ -11,8 +11,14 @@ RUN npx prisma generate
 FROM deps AS migration
 WORKDIR /app
 
-# Run the one-shot migration job as the unprivileged "node" user (uid 1000)
-# that the base image already provides, instead of root.
+# Maintenance tooling ships alongside the migration job: this stage keeps the
+# dev dependencies (tsx, the Prisma CLI) that the production image drops, so it
+# is also where operators bootstrap the first administrator account and reset
+# forgotten passwords.
+COPY scripts ./scripts
+
+# Run as the unprivileged "node" user (uid 1000) that the base image already
+# provides, instead of root.
 USER node
 
 CMD ["npx", "prisma", "migrate", "deploy"]

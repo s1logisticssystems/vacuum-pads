@@ -63,6 +63,14 @@ class EnvVariables {
   @IsOptional()
   @IsString()
   FIREBASE_SERVICE_ACCOUNT_PATH?: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_SECRET?: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_EXPIRES_IN_SECONDS?: string;
 }
 
 const REQUIRED_PRODUCTION_ENV_KEYS = [
@@ -75,6 +83,7 @@ const REQUIRED_PRODUCTION_ENV_KEYS = [
   'CORS_ORIGIN',
   'BACKEND_PUBLIC_URL',
   'ADMIN_PUBLIC_URL',
+  'JWT_SECRET',
 ] as const;
 
 export function validateEnv(config: Record<string, unknown>) {
@@ -129,5 +138,10 @@ function validateProductionEnv(config: EnvVariables): void {
 
   if (config.CORS_ORIGIN!.trim() === '*') {
     throw new Error('CORS_ORIGIN must not be "*" in production.');
+  }
+
+  // A short secret makes issued tokens forgeable, which would defeat the guard.
+  if (config.JWT_SECRET!.trim().length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters in production.');
   }
 }

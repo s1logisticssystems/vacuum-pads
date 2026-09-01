@@ -21,7 +21,7 @@ import {
   normalizeBaseUrl,
 } from './api';
 
-type TabId = 'operations' | 'movements' | 'data' | 'reports';
+type TabId = 'operations' | 'movements' | 'data' | 'reports' | 'users';
 type Tone = 'success' | 'warning' | 'error' | 'info';
 type SelectorBadgeTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 type SelectorBadge = { label: string; tone?: SelectorBadgeTone };
@@ -184,11 +184,12 @@ const pageSizeStorageKeys = {
   },
 } as const;
 
-const tabs: Array<{ id: TabId; label: string }> = [
+const tabs: Array<{ id: TabId; label: string; adminOnly?: boolean }> = [
   { id: 'operations', label: 'Λειτουργίες' },
   { id: 'movements', label: 'Κινήσεις' },
   { id: 'data', label: 'Καταχώρηση' },
   { id: 'reports', label: 'Αναφορές' },
+  { id: 'users', label: 'Χρήστες', adminOnly: true },
 ];
 
 const emptyData: AdminData = {
@@ -445,6 +446,157 @@ const outcomes = [
   { value: 'UNRESOLVED', label: 'Παραμένει σε επισκευή' },
 ];
 
+
+const SESSION_KEY = 'vacuum-admin-session';
+
+export type AdminSession = {
+  accessToken: string;
+  user: { id: string; username: string; displayName: string | null; role: string };
+};
+
+function readStoredSession(): AdminSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as AdminSession;
+    return parsed?.accessToken && parsed?.user ? parsed : null;
+  } catch {
+    // Unreadable or unavailable storage simply means "not signed in".
+    return null;
+  }
+}
+
+function storeSession(session: AdminSession) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // A session that cannot be persisted still works for this tab.
+  }
+}
+
+function clearStoredSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Nothing to clean up if storage is unavailable.
+  }
+}
+
+function LoginScreen({
+  baseUrl,
+  onBaseUrlChange,
+  onSignedIn,
+}: {
+  baseUrl: string;
+  onBaseUrlChange: (value: string) => void;
+  onSignedIn: (session: AdminSession) => void;
+}) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [draftUrl, setDraftUrl] = useState(baseUrl);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+
+    try {
+      const client = new AdminApiClient(baseUrl);
+      const result = await client.login(username, password);
+      const accessToken = textValue(result.accessToken);
+      const user = result.user as AdminSession['user'] | undefined;
+
+      if (!accessToken || !user) {
+        throw new Error('Η απάντηση του διακομιστή δεν περιείχε διαπιστευτήρια.');
+      }
+
+      onSignedIn({ accessToken, user });
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        setError('Λάθος όνομα χρήστη ή κωδικός.');
+      } else if (caught instanceof ApiError && caught.status === 429) {
+        setError('Πολλές προσπάθειες. Δοκιμάστε ξανά σε ένα λεπτό.');
+      } else if (caught instanceof ApiError && caught.status === null) {
+        setError('Δεν υπάρχει σύνδεση με τον διακομιστή. Ελέγξτε τη διεύθυνση.');
+      } else {
+        setError(
+          caught instanceof Error ? caught.message : 'Η σύνδεση απέτυχε.',
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="loginShell">
+      <form className="loginCard" onSubmit={(event) => void submit(event)}>
+        <p className="eyebrow">Vacuum Traceability</p>
+        <h1>Σύνδεση</h1>
+        <p className="loginHint">
+          Συνδεθείτε για πρόσβαση στο κέντρο ελέγχου.
+        </p>
+
+        <label className="field">
+          <span>Όνομα χρήστη</span>
+          <input
+            type="text"
+            value={username}
+            autoComplete="username"
+            autoFocus
+            onChange={(event) => setUsername(event.target.value)}
+            required
+          />
+        </label>
+
+        <label className="field">
+          <span>Κωδικός</span>
+          <input
+            type="password"
+            value={password}
+            autoComplete="current-password"
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </label>
+
+        {error ? <p className="loginError">{error}</p> : null}
+
+        <button type="submit" className="primary" disabled={busy}>
+          {busy ? 'Σύνδεση…' : 'Σύνδεση'}
+        </button>
+
+        <button
+          type="button"
+          className="linkButton"
+          onClick={() => setShowSettings((value) => !value)}
+        >
+          {showSettings ? 'Απόκρυψη ρυθμίσεων' : 'Ρυθμίσεις σύνδεσης'}
+        </button>
+
+        {showSettings ? (
+          <label className="field">
+            <span>Διεύθυνση backend</span>
+            <input
+              type="text"
+              value={draftUrl}
+              onChange={(event) => setDraftUrl(event.target.value)}
+              onBlur={() => onBaseUrlChange(draftUrl)}
+              placeholder={DEFAULT_API_BASE_URL}
+            />
+          </label>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('operations');
   const [activeDataEntity, setActiveDataEntity] =
@@ -457,7 +609,58 @@ export default function App() {
   const [draftBaseUrl, setDraftBaseUrl] = useState(savedBaseUrl);
   const [isEditingBackendUrl, setIsEditingBackendUrl] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const api = useMemo(() => new AdminApiClient(savedBaseUrl), [savedBaseUrl]);
+  const [session, setSession] = useState<AdminSession | null>(() =>
+    readStoredSession(),
+  );
+  const api = useMemo(
+    () => new AdminApiClient(savedBaseUrl, session?.accessToken ?? null),
+    [savedBaseUrl, session],
+  );
+
+  const signOut = useCallback(() => {
+    clearStoredSession();
+    setSession(null);
+  }, []);
+
+  // Confirm the stored token is still accepted. It may have expired, or the
+  // account may have been deactivated or deleted since the last visit.
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void api
+      .getCurrentUser()
+      .catch((error: unknown) => {
+        if (!cancelled && error instanceof ApiError && error.status === 401) {
+          signOut();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, session, signOut]);
+
+  if (!session) {
+    return (
+      <LoginScreen
+        baseUrl={savedBaseUrl}
+        onBaseUrlChange={(value) => {
+          const normalized = normalizeBaseUrl(value);
+          localStorage.setItem(STORAGE_KEY, normalized);
+          setSavedBaseUrl(normalized);
+          setDraftBaseUrl(normalized);
+        }}
+        onSignedIn={(next) => {
+          storeSession(next);
+          setSession(next);
+        }}
+      />
+    );
+  }
 
   function saveBaseUrl() {
     const normalized = normalizeBaseUrl(draftBaseUrl);
@@ -508,7 +711,9 @@ export default function App() {
 
         <div className="adminNavBlock">
           <nav className="tabs" aria-label="Admin tabs">
-            {tabs.map((tab) => (
+            {tabs
+              .filter((tab) => !tab.adminOnly || session.user.role === 'ADMIN')
+              .map((tab) => (
               <button
                 key={tab.id}
                 className={activeTab === tab.id ? 'tabButton active' : 'tabButton'}
@@ -585,6 +790,11 @@ export default function App() {
           onSave={saveBaseUrl}
           onCancel={cancelBaseUrlEdit}
           onClose={() => setIsSettingsOpen(false)}
+          signedInAs={session.user}
+          onSignOut={() => {
+            setIsSettingsOpen(false);
+            signOut();
+          }}
         />
       ) : null}
 
@@ -597,6 +807,8 @@ export default function App() {
           <DataTab api={api} activeEntity={activeDataEntity} />
         ) : activeTab === 'reports' ? (
           <ReportsTab api={api} activeReport={activeReport} />
+        ) : activeTab === 'users' ? (
+          <UsersTab api={api} currentUserId={session.user.id} />
         ) : (
           <ComingSoon label={tabs.find((tab) => tab.id === activeTab)!.label} />
         )}
@@ -4946,6 +5158,8 @@ function ConfirmDialog({
 }
 
 function SettingsDialog({
+  signedInAs,
+  onSignOut,
   api,
   draftBaseUrl,
   savedBaseUrl,
@@ -4956,6 +5170,8 @@ function SettingsDialog({
   onCancel,
   onClose,
 }: {
+  signedInAs: { username: string; displayName: string | null; role: string };
+  onSignOut: () => void;
   api: AdminApiClient;
   draftBaseUrl: string;
   savedBaseUrl: string;
@@ -4989,6 +5205,20 @@ function SettingsDialog({
           onCancel={onCancel}
         />
         <ConnectionCheckPanel api={api} apiBaseUrl={savedBaseUrl} />
+        <div className="accountPanel">
+          <div>
+            <p className="eyebrow">Συνδεδεμένος χρήστης</p>
+            <p className="accountName">
+              {signedInAs.displayName || signedInAs.username}
+            </p>
+            <p className="accountMeta">
+              {signedInAs.username} · {roleLabel(signedInAs.role)}
+            </p>
+          </div>
+          <button type="button" className="danger" onClick={onSignOut}>
+            Αποσύνδεση
+          </button>
+        </div>
       </section>
       </div>
     </ModalPortal>
@@ -8646,4 +8876,506 @@ function faultBadge(item: DataItem): SelectorBadge | null {
   const code = textValue(item.code);
 
   return code ? { label: code, tone: code === 'OTHER' ? 'neutral' : 'info' } : null;
+}
+
+const userRoles = [
+  { value: 'ADMIN', label: 'Διαχειριστής' },
+  { value: 'SUPERVISOR', label: 'Επόπτης' },
+  { value: 'TECHNICIAN', label: 'Τεχνικός' },
+  { value: 'OPERATOR', label: 'Χειριστής' },
+];
+
+function roleLabel(role: string) {
+  return userRoles.find((entry) => entry.value === role)?.label ?? role;
+}
+
+function UsersTab({
+  api,
+  currentUserId,
+}: {
+  api: AdminApiClient;
+  currentUserId: string;
+}) {
+  const [users, setUsers] = useState<DataItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState<DataItem | null>(null);
+  const [showOwnPassword, setShowOwnPassword] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await api.listUsers();
+      setUsers((result.items as DataItem[]) ?? []);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Η φόρτωση απέτυχε.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function removeUser(user: DataItem) {
+    const username = textValue(user.username);
+
+    if (
+      !window.confirm(
+        `Διαγραφή του χρήστη "${username}";\n\nΟ λογαριασμός απενεργοποιείται και δεν θα μπορεί να συνδεθεί. Το ιστορικό κινήσεων διατηρείται.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await api.deleteUser(textValue(user.id));
+      setNotice(`Ο χρήστης ${username} διαγράφηκε.`);
+      await load();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Η διαγραφή απέτυχε.',
+      );
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panelHeader">
+        <div>
+          <h2>Χρήστες</h2>
+          <p className="panelSubtitle">
+            Δημιουργία λογαριασμών, ορισμός κωδικών και απενεργοποίηση.
+          </p>
+        </div>
+        <div className="panelActions">
+          <button type="button" onClick={() => setShowOwnPassword(true)}>
+            Αλλαγή του κωδικού μου
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => setShowCreate(true)}
+          >
+            Νέος χρήστης
+          </button>
+          <button type="button" onClick={() => void load()}>
+            Ανανέωση
+          </button>
+        </div>
+      </div>
+
+      {notice ? <p className="noticeLine">{notice}</p> : null}
+      {error ? <p className="loginError">{error}</p> : null}
+
+      {loading ? (
+        <p className="panelSubtitle">Φόρτωση…</p>
+      ) : (
+        <div className="tableScroll">
+          <table className="dataTable">
+            <thead>
+              <tr>
+                <th>Όνομα χρήστη</th>
+                <th>Ονοματεπώνυμο</th>
+                <th>Ρόλος</th>
+                <th>Σύνδεση</th>
+                <th>Τελευταία είσοδος</th>
+                <th>Ενέργειες</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => {
+                const id = textValue(user.id);
+                const isSelf = id === currentUserId;
+
+                return (
+                  <tr key={id}>
+                    <td>
+                      {textValue(user.username)}
+                      {isSelf ? <span className="selfTag"> (εσείς)</span> : null}
+                    </td>
+                    <td>{textValue(user.displayName) || '—'}</td>
+                    <td>{roleLabel(textValue(user.role))}</td>
+                    <td>
+                      {user.canSignIn ? (
+                        <span className="statusPill ok">Ενεργή</span>
+                      ) : (
+                        <span className="statusPill muted">Χωρίς κωδικό</span>
+                      )}
+                    </td>
+                    <td>
+                      {formatDateTime(textValue(user.lastLoginAt)) || '—'}
+                    </td>
+                    <td className="rowActions">
+                      <button
+                        type="button"
+                        onClick={() => setPasswordTarget(user)}
+                      >
+                        Ορισμός κωδικού
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={isSelf}
+                        title={
+                          isSelf
+                            ? 'Δεν μπορείτε να διαγράψετε τον εαυτό σας'
+                            : undefined
+                        }
+                        onClick={() => void removeUser(user)}
+                      >
+                        Διαγραφή
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showCreate ? (
+        <CreateUserDialog
+          api={api}
+          onClose={() => setShowCreate(false)}
+          onCreated={(username) => {
+            setShowCreate(false);
+            setNotice(`Ο χρήστης ${username} δημιουργήθηκε.`);
+            void load();
+          }}
+        />
+      ) : null}
+
+      {passwordTarget ? (
+        <SetPasswordDialog
+          api={api}
+          user={passwordTarget}
+          onClose={() => setPasswordTarget(null)}
+          onDone={(username) => {
+            setPasswordTarget(null);
+            setNotice(`Ο κωδικός του ${username} ενημερώθηκε.`);
+            void load();
+          }}
+        />
+      ) : null}
+
+      {showOwnPassword ? (
+        <ChangeOwnPasswordDialog
+          api={api}
+          onClose={() => setShowOwnPassword(false)}
+          onDone={() => {
+            setShowOwnPassword(false);
+            setNotice('Ο κωδικός σας άλλαξε.');
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function CreateUserDialog({
+  api,
+  onClose,
+  onCreated,
+}: {
+  api: AdminApiClient;
+  onClose: () => void;
+  onCreated: (username: string) => void;
+}) {
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('OPERATOR');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+
+    try {
+      await api.createUser({
+        username,
+        password,
+        role,
+        ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
+      });
+      onCreated(username.trim().toLowerCase());
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Η δημιουργία απέτυχε.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Νέος χρήστης" onClose={onClose}>
+      <form onSubmit={(event) => void submit(event)} className="modalForm">
+        <label className="field">
+          <span>Όνομα χρήστη</span>
+          <input
+            type="text"
+            value={username}
+            autoFocus
+            required
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="π.χ. operator2"
+          />
+          <small>3-60 χαρακτήρες: γράμματα, αριθμοί, τελεία, παύλα.</small>
+        </label>
+
+        <label className="field">
+          <span>Ονοματεπώνυμο (προαιρετικό)</span>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span>Ρόλος</span>
+          <select
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+          >
+            {userRoles.map((entry) => (
+              <option key={entry.value} value={entry.value}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+          <small>
+            Μόνο ο Διαχειριστής έχει πρόσβαση στη διαχείριση χρηστών.
+          </small>
+        </label>
+
+        <label className="field">
+          <span>Κωδικός</span>
+          <input
+            type="password"
+            value={password}
+            required
+            autoComplete="new-password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <small>Τουλάχιστον 10 χαρακτήρες, με γράμματα και αριθμούς.</small>
+        </label>
+
+        {error ? <p className="loginError">{error}</p> : null}
+
+        <div className="modalActions">
+          <button type="button" onClick={onClose}>
+            Ακύρωση
+          </button>
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? 'Δημιουργία…' : 'Δημιουργία'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function SetPasswordDialog({
+  api,
+  user,
+  onClose,
+  onDone,
+}: {
+  api: AdminApiClient;
+  user: DataItem;
+  onClose: () => void;
+  onDone: (username: string) => void;
+}) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const username = textValue(user.username);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+
+    try {
+      await api.setUserPassword(textValue(user.id), password);
+      onDone(username);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Η αλλαγή απέτυχε.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalShell title={`Κωδικός για ${username}`} onClose={onClose}>
+      <form onSubmit={(event) => void submit(event)} className="modalForm">
+        <label className="field">
+          <span>Νέος κωδικός</span>
+          <input
+            type="password"
+            value={password}
+            autoFocus
+            required
+            autoComplete="new-password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <small>Τουλάχιστον 10 χαρακτήρες, με γράμματα και αριθμούς.</small>
+        </label>
+
+        {error ? <p className="loginError">{error}</p> : null}
+
+        <div className="modalActions">
+          <button type="button" onClick={onClose}>
+            Ακύρωση
+          </button>
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? 'Αποθήκευση…' : 'Αποθήκευση'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function ChangeOwnPasswordDialog({
+  api,
+  onClose,
+  onDone,
+}: {
+  api: AdminApiClient;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (newPassword !== confirmPassword) {
+      setError('Οι δύο νέοι κωδικοί δεν ταιριάζουν.');
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      await api.changeOwnPassword(currentPassword, newPassword);
+      onDone();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Η αλλαγή απέτυχε.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Αλλαγή του κωδικού μου" onClose={onClose}>
+      <form onSubmit={(event) => void submit(event)} className="modalForm">
+        <label className="field">
+          <span>Τρέχων κωδικός</span>
+          <input
+            type="password"
+            value={currentPassword}
+            autoFocus
+            required
+            autoComplete="current-password"
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span>Νέος κωδικός</span>
+          <input
+            type="password"
+            value={newPassword}
+            required
+            autoComplete="new-password"
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+          <small>Τουλάχιστον 10 χαρακτήρες, με γράμματα και αριθμούς.</small>
+        </label>
+
+        <label className="field">
+          <span>Επιβεβαίωση νέου κωδικού</span>
+          <input
+            type="password"
+            value={confirmPassword}
+            required
+            autoComplete="new-password"
+            onChange={(event) => setConfirmPassword(event.target.value)}
+          />
+        </label>
+
+        {error ? <p className="loginError">{error}</p> : null}
+
+        <div className="modalActions">
+          <button type="button" onClick={onClose}>
+            Ακύρωση
+          </button>
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? 'Αποθήκευση…' : 'Αποθήκευση'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function ModalShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <ModalPortal>
+      <div className="modalBackdrop" role="presentation">
+        <section className="messageDialog" role="dialog" aria-modal="true">
+          <div className="modalTitleRow">
+            <div>
+              <p className="eyebrow">Χρήστες</p>
+              <h2>{title}</h2>
+            </div>
+            <button type="button" className="closeButton" onClick={onClose}>
+              ×
+            </button>
+          </div>
+          {children}
+        </section>
+      </div>
+    </ModalPortal>
+  );
 }

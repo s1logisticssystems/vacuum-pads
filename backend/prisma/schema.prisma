@@ -105,6 +105,11 @@ model User {
   displayName          String?
   role                 UserRole        @default(OPERATOR)
   isActive             Boolean         @default(true)
+  // Nullable: historical users exist only to attribute movements and cannot
+  // sign in until an administrator sets a password for them.
+  passwordHash         String?
+  passwordUpdatedAt    DateTime?
+  lastLoginAt          DateTime?
   deletedAt            DateTime?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt

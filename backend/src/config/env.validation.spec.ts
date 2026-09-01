@@ -14,6 +14,7 @@ describe('validateEnv', () => {
     CORS_ORIGIN: 'https://vacuum-admin.example.com',
     BACKEND_PUBLIC_URL: 'https://vacuum-api.example.com',
     ADMIN_PUBLIC_URL: 'https://vacuum-admin.example.com',
+    JWT_SECRET: 'a-test-signing-secret-of-at-least-32-chars',
   };
 
   it('allows development without production-only deployment values', () => {
@@ -44,5 +45,15 @@ describe('validateEnv', () => {
         CORS_ORIGIN: '*',
       }),
     ).toThrow(/CORS_ORIGIN/);
+  });
+
+  it('rejects a short JWT secret in production', () => {
+    expect(() =>
+      validateEnv({ ...productionEnv, JWT_SECRET: 'too-short' }),
+    ).toThrow(/JWT_SECRET/);
+  });
+
+  it('accepts a production configuration with a strong JWT secret', () => {
+    expect(validateEnv(productionEnv).NODE_ENV).toBe('production');
   });
 });
