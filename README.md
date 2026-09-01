@@ -122,14 +122,28 @@ Backend και Admin δένονται μόνο σε `127.0.0.1` σκόπιμα. 
 
 ## ⚠️ Σημαντικό για security review
 
-Δείτε το ξεχωριστό πινακάκι/σημείωμα ασφαλείας που συνοδεύει αυτό το repository. Εν συντομία: το backend **δεν έχει ακόμα ενσωματωμένη authentication/authorization** στα API endpoints — οποιοσδήποτε έχει network πρόσβαση στο backend port μπορεί να καλέσει τα endpoints. Πριν από production χρήση εκτός ελεγχόμενου/απομονωμένου δικτύου, απαιτείται πρόσθετο επίπεδο πρόσβασης (VPN, reverse-proxy auth, ή built-in auth layer).
+### Ταυτοποίηση χρηστών ✅
 
-Το πλάνο για το πώς θα προστεθεί ισχυρή ταυτοποίηση (authentication) και πιστοποίηση/εξουσιοδότηση (authorization) — JWT login, RBAC, MFA, προαιρετικό SSO — περιγράφεται αναλυτικά στο [`docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md`](docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md).
+**Κάθε endpoint απαιτεί σύνδεση.** Δεν υπάρχει ανώνυμη πρόσβαση ούτε κοινός λογαριασμός· εξαιρούνται μόνο τα endpoints ελέγχου υγείας, που δεν εκθέτουν επιχειρησιακά δεδομένα.
+
+- Σύνδεση με όνομα χρήστη/κωδικό και βραχύβιο token (12 ώρες).
+- Ρόλοι: μόνο ο `ADMIN` διαχειρίζεται λογαριασμούς.
+- Κωδικοί αποθηκευμένοι ως bcrypt hashes· δεν επιστρέφονται ποτέ από το API.
+- Rate limiting 5 προσπαθειών/λεπτό στη σύνδεση.
+- Ο έλεγχος λογαριασμού γίνεται σε **κάθε** αίτημα, ώστε η απενεργοποίηση χρήστη να ισχύει άμεσα.
+
+Ο πρώτος διαχειριστής δημιουργείται με το script `set-user-password.ts`. Πλήρης οδηγός λειτουργίας — δημιουργία χρηστών, επαναφορά κωδικών, ανάκτηση πρόσβασης:
+
+```text
+docs/USER_MANAGEMENT.md
+```
+
+Το αρχικό σχέδιο υλοποίησης (με τα επόμενα προαιρετικά βήματα: MFA, SSO) παραμένει στο [`docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md`](docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md).
 
 ### Σκλήρυνση container
 
 - Backend και Admin **δεν τρέχουν ως root**: το backend ως `node` (uid 1000), το Admin στην επίσημη unprivileged έκδοση του nginx ως `nginx` (uid 101) με ακρόαση στη θύρα 8080 αντί για την προνομιούχο 80.
 - Το production image του backend εγκαθιστά **μόνο** production dependencies και δεν περιλαμβάνει εργαλεία ανάπτυξης (π.χ. το Prisma CLI, που το npm θα εγκαθιστούσε ως peer dependency).
-- Γνωστές ευπάθειες production dependencies: **0 critical, 0 high**. Παραμένουν 3 moderate από το `minio` → `query-string` → `decode-uri-component`, όπου η διορθωμένη έκδοση είναι ESM-only και ασύμβατη με την τρέχουσα αλυσίδα· παρακολουθείται για μελλοντική αναβάθμιση.
+- Γνωστές ευπάθειες production dependencies: **μηδέν**, σε κάθε επίπεδο σοβαρότητας.
 
 Περισσότερα τεχνικά στοιχεία στο [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) και [`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md).
