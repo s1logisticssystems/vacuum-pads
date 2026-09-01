@@ -31,6 +31,17 @@ pnpm-debug.log*
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
+mobile/build/
+mobile/android/local.properties
+mobile/android/.gradle/
+
+# Android signing material and build output. A leaked keystore lets anyone
+# publish an update that installs over this app.
+*.jks
+*.keystore
+key.properties
+*.apk
+*.aab
 
 # IDE / editor files
 .idea/
