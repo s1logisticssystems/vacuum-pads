@@ -108,4 +108,10 @@ Backend και Admin δένονται μόνο σε `127.0.0.1` σκόπιμα. 
 
 Το πλάνο για το πώς θα προστεθεί ισχυρή ταυτοποίηση (authentication) και πιστοποίηση/εξουσιοδότηση (authorization) — JWT login, RBAC, MFA, προαιρετικό SSO — περιγράφεται αναλυτικά στο [`docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md`](docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md).
 
+### Σκλήρυνση container
+
+- Backend και Admin **δεν τρέχουν ως root**: το backend ως `node` (uid 1000), το Admin στην επίσημη unprivileged έκδοση του nginx ως `nginx` (uid 101) με ακρόαση στη θύρα 8080 αντί για την προνομιούχο 80.
+- Το production image του backend εγκαθιστά **μόνο** production dependencies και δεν περιλαμβάνει εργαλεία ανάπτυξης (π.χ. το Prisma CLI, που το npm θα εγκαθιστούσε ως peer dependency).
+- Γνωστές ευπάθειες production dependencies: **0 critical, 0 high**. Παραμένουν 3 moderate από το `minio` → `query-string` → `decode-uri-component`, όπου η διορθωμένη έκδοση είναι ESM-only και ασύμβατη με την τρέχουσα αλυσίδα· παρακολουθείται για μελλοντική αναβάθμιση.
+
 Περισσότερα τεχνικά στοιχεία στο [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) και [`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md).
