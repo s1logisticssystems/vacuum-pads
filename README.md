@@ -96,7 +96,25 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 
 ## Backups
 
-Scripts για PostgreSQL/MinIO backup βρίσκονται στο `docs/PRODUCTION_DEPLOYMENT.md`.
+Πλήρης οδηγός λειτουργίας για την ομάδα IT — τι κρατάμε αντίγραφο, πώς τρέχουν και προγραμματίζονται τα scripts, πώς αλλάζει ο φάκελος προορισμού, και **πώς γίνεται επαναφορά**:
+
+```text
+docs/BACKUP_AND_RESTORE.md
+```
+
+Δύο ισοδύναμες εκδοχές ανά λειτουργικό:
+
+| Πλατφόρμα | Scripts |
+|---|---|
+| Linux / macOS | `scripts/backup-postgres.sh`, `scripts/backup-minio.sh` |
+| Windows | `scripts/backup-postgres.ps1`, `scripts/backup-minio.ps1` |
+
+Χρειάζονται αντίγραφα **και τα δύο** (βάση + φωτογραφίες): η βάση κρατά μόνο αναφορές στα αρχεία εικόνων, όχι τις ίδιες τις εικόνες.
+
+```bash
+./scripts/backup-postgres.sh --output-dir /srv/backups/vacuum
+./scripts/backup-minio.sh --output-dir /srv/backups/vacuum
+```
 
 ## Πρόσβαση εκτός τοπικού δικτύου
 
