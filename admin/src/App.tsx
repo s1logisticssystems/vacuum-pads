@@ -21,7 +21,7 @@ import {
   normalizeBaseUrl,
 } from './api';
 
-type TabId = 'operations' | 'movements' | 'data' | 'reports' | 'users';
+type TabId = 'operations' | 'movements' | 'data' | 'reports';
 type Tone = 'success' | 'warning' | 'error' | 'info';
 type SelectorBadgeTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 type SelectorBadge = { label: string; tone?: SelectorBadgeTone };
@@ -184,12 +184,11 @@ const pageSizeStorageKeys = {
   },
 } as const;
 
-const tabs: Array<{ id: TabId; label: string; adminOnly?: boolean }> = [
+const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'operations', label: 'Λειτουργίες' },
   { id: 'movements', label: 'Κινήσεις' },
   { id: 'data', label: 'Καταχώρηση' },
   { id: 'reports', label: 'Αναφορές' },
-  { id: 'users', label: 'Χρήστες', adminOnly: true },
 ];
 
 const emptyData: AdminData = {
@@ -699,21 +698,31 @@ export default function App() {
             <p className="eyebrow">Vacuum Traceability Admin</p>
             <h1>Κέντρο ελέγχου λειτουργιών</h1>
           </div>
-          <button
-            type="button"
-            className="settingsButton"
-            aria-label="Ρυθμίσεις admin"
-            onClick={() => setIsSettingsOpen(true)}
-          >
-            ⚙
-          </button>
+          {session.user.role === 'ADMIN' ? (
+            <button
+              type="button"
+              className="settingsButton"
+              aria-label="Ρυθμίσεις admin"
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              ⚙
+            </button>
+          ) : (
+            // Non-administrators have no settings to change, but must still be
+            // able to end their session — these are often shared machines.
+            <button
+              type="button"
+              className="signOutButton"
+              onClick={signOut}
+            >
+              Αποσύνδεση
+            </button>
+          )}
         </header>
 
         <div className="adminNavBlock">
           <nav className="tabs" aria-label="Admin tabs">
-            {tabs
-              .filter((tab) => !tab.adminOnly || session.user.role === 'ADMIN')
-              .map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 className={activeTab === tab.id ? 'tabButton active' : 'tabButton'}
@@ -791,6 +800,7 @@ export default function App() {
           onCancel={cancelBaseUrlEdit}
           onClose={() => setIsSettingsOpen(false)}
           signedInAs={session.user}
+          currentUserId={session.user.id}
           onSignOut={() => {
             setIsSettingsOpen(false);
             signOut();
@@ -807,8 +817,6 @@ export default function App() {
           <DataTab api={api} activeEntity={activeDataEntity} />
         ) : activeTab === 'reports' ? (
           <ReportsTab api={api} activeReport={activeReport} />
-        ) : activeTab === 'users' ? (
-          <UsersTab api={api} currentUserId={session.user.id} />
         ) : (
           <ComingSoon label={tabs.find((tab) => tab.id === activeTab)!.label} />
         )}
@@ -5159,6 +5167,7 @@ function ConfirmDialog({
 
 function SettingsDialog({
   signedInAs,
+  currentUserId,
   onSignOut,
   api,
   draftBaseUrl,
@@ -5171,6 +5180,7 @@ function SettingsDialog({
   onClose,
 }: {
   signedInAs: { username: string; displayName: string | null; role: string };
+  currentUserId: string;
   onSignOut: () => void;
   api: AdminApiClient;
   draftBaseUrl: string;
@@ -5205,6 +5215,7 @@ function SettingsDialog({
           onCancel={onCancel}
         />
         <ConnectionCheckPanel api={api} apiBaseUrl={savedBaseUrl} />
+        <UsersPanel api={api} currentUserId={currentUserId} />
         <div className="accountPanel">
           <div>
             <p className="eyebrow">Συνδεδεμένος χρήστης</p>
@@ -8889,7 +8900,7 @@ function roleLabel(role: string) {
   return userRoles.find((entry) => entry.value === role)?.label ?? role;
 }
 
-function UsersTab({
+function UsersPanel({
   api,
   currentUserId,
 }: {
@@ -8947,11 +8958,11 @@ function UsersTab({
   }
 
   return (
-    <section className="panel">
-      <div className="panelHeader">
+    <section className="settingsSection">
+      <div className="settingsSectionHeader">
         <div>
-          <h2>Χρήστες</h2>
-          <p className="panelSubtitle">
+          <p className="eyebrow">Χρήστες</p>
+          <p className="settingsSectionHint">
             Δημιουργία λογαριασμών, ορισμός κωδικών και απενεργοποίηση.
           </p>
         </div>
