@@ -2,6 +2,8 @@
 node_modules/
 dist/
 build/
+.next/
+out/
 coverage/
 *.tsbuildinfo
 
@@ -11,10 +13,24 @@ coverage/
 !.env.example
 !.env.production.example
 
+# Firebase local configuration
+mobile/android/app/google-services.json
+**/serviceAccount*.json
+**/*service-account*.json
+
 # Logs
 logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Flutter / Dart generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
 
 # IDE / editor files
 .idea/
@@ -25,16 +41,34 @@ npm-debug.log*
 Thumbs.db
 Desktop.ini
 
-# Local data / secrets
-**/serviceAccount*.json
-**/*service-account*.json
-backend/storage/uploads/
-data/
+# Docker local data folders
+.docker-data/
+docker-data/
+.volumes/
 volumes/
+data/postgres/
+data/minio/
+backend/storage/uploads/
+
+# Backup output. Contains real repair photos and database dumps.
+backups/
 
 # Temporary files
 tmp/
 temp/
+_local/
 *.tmp
+*.temp
 *.bak
 *.swp
+*.swo
+*~
+
+# Keep important project files tracked
+!package-lock.json
+!pubspec.lock
+!Dockerfile
+!docker-compose.yml
+!docker-compose.yaml
+!docker-compose*.yml
+!docker-compose*.yaml
