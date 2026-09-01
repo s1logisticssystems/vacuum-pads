@@ -1,7 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PhotoStorageProvider } from '@prisma/client';
-import { Client as MinioClient } from 'minio';
+import {
+  CreateBucketCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
@@ -28,6 +36,7 @@ interface MinioConnectionConfig {
   accessKey: string;
   secretKey: string;
   bucket: string;
+  region: string;
   publicBaseUrl: string | null;
 }
 
@@ -35,7 +44,7 @@ interface MinioConnectionConfig {
 export class StorageService {
   private readonly fileStorageRoot: string;
   private readonly minioConfig: MinioConnectionConfig | null;
-  private readonly minioClient: MinioClient | null;
+  private readonly minioClient: S3Client | null;
   private readonly isProduction: boolean;
 
   constructor(private readonly configService: ConfigService) {
@@ -60,12 +69,19 @@ export class StorageService {
     }
 
     this.minioClient = this.minioConfig
-      ? new MinioClient({
-          endPoint: this.minioConfig.endPoint,
-          port: this.minioConfig.port,
-          useSSL: this.minioConfig.useSSL,
-          accessKey: this.minioConfig.accessKey,
-          secretKey: this.minioConfig.secretKey,
+      ? new S3Client({
+          endpoint: `${this.minioConfig.useSSL ? 'https' : 'http'}://${
+            this.minioConfig.endPoint
+          }:${this.minioConfig.port}`,
+          // MinIO addresses buckets as a path segment rather than a subdomain,
+          // so virtual-hosted style (the SDK default) would not resolve.
+          forcePathStyle: true,
+          // MinIO ignores the region but the SDK requires one to sign requests.
+          region: this.minioConfig.region,
+          credentials: {
+            accessKeyId: this.minioConfig.accessKey,
+            secretAccessKey: this.minioConfig.secretKey,
+          },
         })
       : null;
   }
@@ -85,14 +101,14 @@ export class StorageService {
     if (this.minioClient !== null && this.minioConfig !== null) {
       try {
         await this.ensureBucketExists();
-        await this.minioClient.putObject(
-          this.minioConfig.bucket,
-          objectKey,
-          input.file.buffer,
-          input.file.size,
-          {
-            'Content-Type': contentType,
-          },
+        await this.minioClient.send(
+          new PutObjectCommand({
+            Bucket: this.minioConfig.bucket,
+            Key: objectKey,
+            Body: input.file.buffer,
+            ContentLength: input.file.size,
+            ContentType: contentType,
+          }),
         );
 
         return {
@@ -107,9 +123,11 @@ export class StorageService {
           contentType,
           sizeBytes: input.file.size,
           cleanup: async () => {
-            await this.minioClient?.removeObject(
-              this.minioConfig!.bucket,
-              objectKey,
+            await this.minioClient?.send(
+              new DeleteObjectCommand({
+                Bucket: this.minioConfig!.bucket,
+                Key: objectKey,
+              }),
             );
           },
         };
@@ -148,7 +166,12 @@ export class StorageService {
         photo.storageProvider === PhotoStorageProvider.MINIO &&
         this.minioClient !== null
       ) {
-        await this.minioClient.removeObject(photo.bucket, photo.objectKey);
+        await this.minioClient.send(
+          new DeleteObjectCommand({
+            Bucket: photo.bucket,
+            Key: photo.objectKey,
+          }),
+        );
         return;
       }
 
@@ -186,10 +209,13 @@ export class StorageService {
       this.minioClient !== null
     ) {
       try {
-        const url = await this.minioClient.presignedGetObject(
-          photo.bucket,
-          photo.objectKey,
-          REPAIR_PHOTO_VIEW_URL_EXPIRY_SECONDS,
+        const url = await getSignedUrl(
+          this.minioClient,
+          new GetObjectCommand({
+            Bucket: photo.bucket,
+            Key: photo.objectKey,
+          }),
+          { expiresIn: REPAIR_PHOTO_VIEW_URL_EXPIRY_SECONDS },
         );
 
         return {
@@ -295,10 +321,16 @@ export class StorageService {
       return;
     }
 
-    const exists = await this.minioClient.bucketExists(this.minioConfig.bucket);
-
-    if (!exists) {
-      await this.minioClient.makeBucket(this.minioConfig.bucket);
+    try {
+      await this.minioClient.send(
+        new HeadBucketCommand({ Bucket: this.minioConfig.bucket }),
+      );
+    } catch {
+      // HeadBucket throws when the bucket is missing; the SDK has no boolean
+      // "exists" call, so creation is attempted on any lookup failure.
+      await this.minioClient.send(
+        new CreateBucketCommand({ Bucket: this.minioConfig.bucket }),
+      );
     }
   }
 
@@ -412,6 +444,8 @@ export class StorageService {
       accessKey,
       secretKey,
       bucket,
+      // MinIO does not use regions; real S3 deployments set S3_REGION.
+      region: this.configService.get<string>('S3_REGION')?.trim() || 'us-east-1',
       publicBaseUrl: `${parsedUrl.protocol}//${parsedUrl.host}`,
     };
   }

@@ -10,6 +10,15 @@ import {
   RepairPhotoUploadFailedError,
 } from './storage.types';
 import { StorageService } from './storage.service';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn(),
+}));
+
+const getSignedUrlMock = getSignedUrl as jest.MockedFunction<
+  typeof getSignedUrl
+>;
 
 describe('StorageService', () => {
   let tempRoot: string;
@@ -32,6 +41,7 @@ describe('StorageService', () => {
 
   beforeEach(() => {
     tempRoot = mkdtempSync(path.join(tmpdir(), 'vacuum-storage-'));
+    getSignedUrlMock.mockReset();
   });
 
   afterEach(() => {
@@ -74,8 +84,7 @@ describe('StorageService', () => {
     );
 
     service['minioClient'] = {
-      bucketExists: jest.fn().mockResolvedValue(true),
-      putObject: jest.fn().mockRejectedValue(new Error('boom')),
+      send: jest.fn().mockRejectedValue(new Error('boom')),
     } as never;
 
     const result = await service.storeRepairPhoto({
@@ -116,8 +125,7 @@ describe('StorageService', () => {
     );
 
     service['minioClient'] = {
-      bucketExists: jest.fn().mockResolvedValue(true),
-      putObject: jest.fn().mockRejectedValue(new Error('boom')),
+      send: jest.fn().mockRejectedValue(new Error('boom')),
     } as never;
 
     await expect(
@@ -142,9 +150,7 @@ describe('StorageService', () => {
     );
 
     service['minioClient'] = {
-      bucketExists: jest.fn().mockResolvedValue(true),
-      putObject: jest.fn().mockResolvedValue(undefined),
-      removeObject: jest.fn().mockResolvedValue(undefined),
+      send: jest.fn().mockResolvedValue(undefined),
     } as never;
 
     const result = await service.storeRepairPhoto({
@@ -167,11 +173,10 @@ describe('StorageService', () => {
       }),
     );
 
-    service['minioClient'] = {
-      presignedGetObject: jest
-        .fn()
-        .mockResolvedValue('http://localhost:9000/signed-photo-url'),
-    } as never;
+    service['minioClient'] = { send: jest.fn() } as never;
+    getSignedUrlMock.mockResolvedValue(
+      'http://localhost:9000/signed-photo-url',
+    );
 
     const result = await service.createRepairPhotoViewUrl({
       storageProvider: PhotoStorageProvider.MINIO,
@@ -219,9 +224,8 @@ describe('StorageService', () => {
       }),
     );
 
-    service['minioClient'] = {
-      presignedGetObject: jest.fn().mockRejectedValue(new Error('boom')),
-    } as never;
+    service['minioClient'] = { send: jest.fn() } as never;
+    getSignedUrlMock.mockRejectedValue(new Error('boom'));
 
     await expect(
       service.createRepairPhotoViewUrl({
