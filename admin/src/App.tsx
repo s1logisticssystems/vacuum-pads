@@ -4374,12 +4374,14 @@ function RepairPhotoGalleryDialog({
             <Notice tone="warning">Δεν υπάρχουν φωτογραφίες για αυτό το Repair.</Notice>
           ) : null}
           <RepairPhotoStageSection
+            api={api}
             title="Φωτογραφίες δήλωσης βλάβης"
             photos={faultDeclarationPhotos}
             deletingPhotoId={deletingPhotoId}
             onDelete={(photo) => void deletePhoto(photo)}
           />
           <RepairPhotoStageSection
+            api={api}
             title="Φωτογραφίες αποκατάστασης"
             photos={repairCompletionPhotos}
             deletingPhotoId={deletingPhotoId}
@@ -4388,7 +4390,7 @@ function RepairPhotoGalleryDialog({
           {photos.length > 0 ? (
             <div className="photoGalleryGrid">
               {photos.map((photo) => {
-                const url = textValue(photo.url);
+                const url = api.resolveUrl(textValue(photo.url));
                 const filename = textValue(photo.filename) || 'repair-photo';
                 const createdAt =
                   formatDateTime(textValue(photo.createdAt)) ||
@@ -4434,11 +4436,13 @@ function RepairPhotoGalleryDialog({
 }
 
 function RepairPhotoStageSection({
+  api,
   title,
   photos,
   deletingPhotoId,
   onDelete,
 }: {
+  api: AdminApiClient;
   title: string;
   photos: DataItem[];
   deletingPhotoId: string | null;
@@ -4456,7 +4460,7 @@ function RepairPhotoStageSection({
         <div className="photoGalleryGrid">
           {photos.map((photo) => {
             const photoId = textValue(photo.id);
-            const url = textValue(photo.url);
+            const url = api.resolveUrl(textValue(photo.url));
             const filename = textValue(photo.filename) || 'repair-photo';
             const createdAt =
               formatDateTime(textValue(photo.createdAt)) ||

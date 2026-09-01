@@ -22,6 +22,7 @@ import { QrService } from '../qr/qr.service';
 import { StorageService } from '../storage/storage.service';
 import {
   InvalidRepairPhotoFileError,
+  RepairPhotoContent,
   RepairPhotoDeleteFailedError,
   RepairPhotoUploadFailedError,
   StoredRepairPhotoInternal,
@@ -2498,10 +2499,58 @@ export class FaultService {
     };
   }
 
-  private async mapRepairPhotoListItem(
+  /** Loads a repair photo's bytes for the API to stream to the browser. */
+  async getRepairPhotoContent(
+    repairId: string,
+    photoId: string,
+  ): Promise<RepairPhotoContent> {
+    const normalizedRepairId = repairId.trim();
+    const normalizedPhotoId = photoId.trim();
+
+    if (!normalizedRepairId || !normalizedPhotoId) {
+      throw new NotFoundException('No matching repair photo found');
+    }
+
+    const photo = await this.prismaService.repairPhoto.findFirst({
+      where: {
+        id: normalizedPhotoId,
+        repairId: normalizedRepairId,
+      },
+      select: {
+        objectKey: true,
+        bucket: true,
+        storageProvider: true,
+        filesystemPath: true,
+        contentType: true,
+        sizeBytes: true,
+        originalFilename: true,
+      },
+    });
+
+    if (!photo) {
+      throw new NotFoundException('No matching repair photo found');
+    }
+
+    const content = await this.storageService.readStoredRepairPhoto(photo);
+
+    if (!content) {
+      throw new NotFoundException('Repair photo content is unavailable');
+    }
+
+    return content;
+  }
+
+  private mapRepairPhotoListItem(
     photo: RepairPhotoRecord,
-  ): Promise<RepairPhotoListItem> {
-    const viewUrl = await this.storageService.createRepairPhotoViewUrl(photo);
+  ): RepairPhotoListItem {
+    // Path relative to the API root, which the client joins to its configured
+    // backend URL. A signed object-store URL would name the storage endpoint,
+    // which only resolves on the private Docker network, so photos would not
+    // load for any browser outside the host. Streaming through the API keeps
+    // the bucket private and works wherever the API is reachable.
+    const url = `/repairs/${encodeURIComponent(
+      photo.repairId,
+    )}/photos/${encodeURIComponent(photo.id)}/content`;
 
     return {
       id: photo.id,
@@ -2513,9 +2562,9 @@ export class FaultService {
       stage: photo.stage,
       storageProvider: photo.storageProvider,
       createdAt: photo.createdAt.toISOString(),
-      url: viewUrl.url,
-      urlExpiresAt: viewUrl.expiresAt,
-      urlSource: viewUrl.source,
+      url,
+      urlExpiresAt: null,
+      urlSource: 'PROXY',
     };
   }
 

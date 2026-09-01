@@ -106,6 +106,26 @@ export class AdminApiClient {
     return `${normalizeBaseUrl(this.baseUrl)}/events/admin`;
   }
 
+  /**
+   * Turns an API-relative path into a URL the browser can load.
+   *
+   * Repair photos are served by the backend as "/repairs/.../content" rather
+   * than as object-store links, so they resolve against whichever backend URL
+   * this admin is configured with. Absolute URLs are returned unchanged.
+   */
+  resolveUrl(pathOrUrl: string): string {
+    if (!pathOrUrl) {
+      return '';
+    }
+
+    if (/^[a-z][a-z0-9+.-]*:/i.test(pathOrUrl)) {
+      return pathOrUrl;
+    }
+
+    const suffix = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
+    return `${normalizeBaseUrl(this.baseUrl)}${suffix}`;
+  }
+
   listMovements(
     filters: Record<string, string | string[] | number | undefined>,
   ) {

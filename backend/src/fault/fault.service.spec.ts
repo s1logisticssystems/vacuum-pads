@@ -2856,7 +2856,7 @@ describe('FaultService', () => {
     expect(repairPhotoCreate).not.toHaveBeenCalled();
   });
 
-  it('lists repair photos with signed view URLs', async () => {
+  it('lists repair photos with API-streamed view URLs', async () => {
     repairFindFirst.mockResolvedValue({ id: 'repair-1' });
     repairPhotoFindMany.mockResolvedValue([
       {
@@ -2899,12 +2899,9 @@ describe('FaultService', () => {
         objectKey: true,
       }) as Record<string, boolean>,
     );
-    expect(storageCreateRepairPhotoViewUrl).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'photo-1',
-        objectKey: 'repair-photos/repair-1/example.png',
-      }),
-    );
+    // Photos are streamed through the API rather than linked with a signed
+    // object-store URL, which would only resolve on the private network.
+    expect(storageCreateRepairPhotoViewUrl).not.toHaveBeenCalled();
     expect(result).toEqual({
       repairId: 'repair-1',
       photos: [
@@ -2918,9 +2915,9 @@ describe('FaultService', () => {
           stage: RepairPhotoStage.FAULT_DECLARATION,
           storageProvider: PhotoStorageProvider.MINIO,
           createdAt: '2026-05-22T12:00:00.000Z',
-          url: 'http://localhost:9000/signed-photo-url',
-          urlExpiresAt: '2026-05-22T12:10:00.000Z',
-          urlSource: 'SIGNED',
+          url: '/repairs/repair-1/photos/photo-1/content',
+          urlExpiresAt: null,
+          urlSource: 'PROXY',
         },
       ],
       faultDeclarationPhotos: [

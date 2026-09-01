@@ -11,6 +11,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import {
@@ -20,6 +21,7 @@ import {
   RepairPhotoStorageConfigurationError,
   RepairPhotoUploadFailedError,
   StoreRepairPhotoInput,
+  RepairPhotoContent,
   RepairPhotoViewUrl,
   StoredRepairPhotoInternal,
   StoredRepairPhoto,
@@ -196,6 +198,82 @@ export class StorageService {
         'Repair photo could not be deleted from storage',
       );
     }
+  }
+
+  /**
+   * Reads a stored photo back so the API can stream it to the browser.
+   *
+   * Signed object-store URLs point at the storage endpoint, which stays on the
+   * private Docker network and is unreachable from a browser outside the host.
+   * Serving the bytes through the API keeps the bucket private while making
+   * photos viewable wherever the API itself is reachable.
+   */
+  async readStoredRepairPhoto(
+    photo: Pick<
+      StoredRepairPhoto,
+      'storageProvider' | 'objectKey' | 'bucket' | 'filesystemPath'
+    > & {
+      // Nullable on the stored record, unlike StoredRepairPhoto.
+      contentType: string | null;
+      sizeBytes: number | null;
+      originalFilename: string | null;
+    },
+  ): Promise<RepairPhotoContent | null> {
+    const contentType = photo.contentType || 'application/octet-stream';
+
+    if (
+      photo.storageProvider === PhotoStorageProvider.MINIO &&
+      this.minioClient !== null
+    ) {
+      try {
+        const result = await this.minioClient.send(
+          new GetObjectCommand({
+            Bucket: photo.bucket,
+            Key: photo.objectKey,
+          }),
+        );
+
+        if (!result.Body) {
+          return null;
+        }
+
+        return {
+          stream: result.Body as NodeJS.ReadableStream,
+          contentType: result.ContentType || contentType,
+          sizeBytes: result.ContentLength ?? photo.sizeBytes ?? null,
+          filename: photo.originalFilename ?? null,
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    if (
+      photo.storageProvider === PhotoStorageProvider.FILESYSTEM &&
+      photo.filesystemPath
+    ) {
+      const absolutePath = path.resolve(
+        this.fileStorageRoot,
+        photo.filesystemPath,
+      );
+
+      if (!absolutePath.startsWith(this.fileStorageRoot)) {
+        return null;
+      }
+
+      try {
+        return {
+          stream: createReadStream(absolutePath),
+          contentType,
+          sizeBytes: photo.sizeBytes ?? null,
+          filename: photo.originalFilename ?? null,
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
   }
 
   async createRepairPhotoViewUrl(

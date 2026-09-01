@@ -31,12 +31,24 @@ export interface StoredRepairPhotoInternal extends StoredRepairPhoto {
   cleanup: () => Promise<void>;
 }
 
-export type RepairPhotoViewUrlSource = 'SIGNED' | 'PUBLIC' | 'UNAVAILABLE';
+export type RepairPhotoViewUrlSource =
+  | 'PROXY'
+  | 'SIGNED'
+  | 'PUBLIC'
+  | 'UNAVAILABLE';
 
 export interface RepairPhotoViewUrl {
   url: string | null;
   expiresAt: string | null;
   source: RepairPhotoViewUrlSource;
+}
+
+/** A repair photo's bytes, streamed back through the API. */
+export interface RepairPhotoContent {
+  stream: NodeJS.ReadableStream;
+  contentType: string;
+  sizeBytes: number | null;
+  filename: string | null;
 }
 
 export class InvalidRepairPhotoFileError extends Error {
