@@ -1,6 +1,10 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
-ENV DATABASE_URL=postgresql://vacuum_user:vacuum_pass@localhost:5432/vacuum_traceability?schema=public
+# Build-time placeholder only. "prisma generate" requires the variable to be
+# parseable but never connects, and no stage that runs the server inherits it.
+# A realistic-looking credential here would be baked into the image and flagged
+# as a hardcoded secret, so this is deliberately obviously fake.
+ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build?schema=public
 
 COPY package*.json ./
 RUN npm ci
@@ -25,7 +29,11 @@ CMD ["npx", "prisma", "migrate", "deploy"]
 
 FROM node:22-alpine AS builder
 WORKDIR /app
-ENV DATABASE_URL=postgresql://vacuum_user:vacuum_pass@localhost:5432/vacuum_traceability?schema=public
+# Build-time placeholder only. "prisma generate" requires the variable to be
+# parseable but never connects, and no stage that runs the server inherits it.
+# A realistic-looking credential here would be baked into the image and flagged
+# as a hardcoded secret, so this is deliberately obviously fake.
+ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build?schema=public
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
