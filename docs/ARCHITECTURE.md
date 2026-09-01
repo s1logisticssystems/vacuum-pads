@@ -1,128 +1,108 @@
-# Architecture
+# Αρχιτεκτονική
 
-## High-Level Architecture
+## Συνολική εικόνα
 
-The system will use a mobile-first operational flow with a backend-centered domain model.
+Το σύστημα σχεδιάστηκε με τις καθημερινές εργασίες να ξεκινούν από το κινητό και όλους τους επιχειρησιακούς κανόνες να επιβάλλονται κεντρικά, στον διακομιστή.
 
 ```mermaid
 flowchart LR
-    A["Flutter Android App"] --> B["NestJS Backend API"]
-    E["Future Next.js Admin"] --> B
+    A["Εφαρμογή Android (Flutter)"] --> B["Backend API (NestJS)"]
+    E["Web διαχείριση (React)"] --> B
     B --> C["PostgreSQL"]
-    B --> D["MinIO / S3-Compatible Storage"]
+    B --> D["MinIO / αποθήκευση συμβατή με S3"]
 ```
 
-Core intent:
+Ο ρόλος κάθε μέρους:
 
-- Flutter handles scanning and operator workflows
-- NestJS owns business rules and state transitions
-- PostgreSQL stores the operational source-of-truth data
-- MinIO stores repair photos in local development
-- A future Next.js admin app will use the same backend API
+- Η **εφαρμογή Android** αναλαμβάνει τη σάρωση QR και τις ροές εργασίας του χειριστή.
+- Το **backend** κατέχει τους επιχειρησιακούς κανόνες και τις αλλαγές κατάστασης.
+- Η **PostgreSQL** αποθηκεύει τα επιχειρησιακά δεδομένα που αποτελούν την πηγή αλήθειας.
+- Το **MinIO** αποθηκεύει τις φωτογραφίες επισκευών.
+- Η **web διαχείριση** χρησιμοποιεί ακριβώς το ίδιο API με το κινητό.
 
-## Why the Backend Is the Source of Truth
+## Γιατί το backend είναι η πηγή αλήθειας
 
-The backend must be the source of truth because traceability rules are operationally critical and must remain consistent across all clients.
+Οι κανόνες ιχνηλασιμότητας είναι κρίσιμοι για τη λειτουργία και πρέπει να ισχύουν με τον ίδιο ακριβώς τρόπο, ανεξάρτητα από το ποιο πρόγραμμα τους καλεί. Αν κάθε εφαρμογή κρατούσε τη δική της εκδοχή, αργά ή γρήγορα θα διαφωνούσαν μεταξύ τους.
 
-This means:
+Πρακτικά αυτό σημαίνει ότι στον διακομιστή γίνονται:
 
-- Current pad location must be computed and persisted centrally
-- Charge and decharge validation must happen server-side
-- Repair lifecycle enforcement must happen server-side
-- Audit log creation must happen server-side
-- Flutter may show UI hints, but it must not own the real business rules
+- ο υπολογισμός και η αποθήκευση της τρέχουσας θέσης κάθε vacuum,
+- ο έλεγχος εγκυρότητας κάθε χρέωσης και αποχρέωσης,
+- η επιβολή του κύκλου ζωής μιας επισκευής,
+- η καταγραφή στο μητρώο ελέγχου (audit log).
 
-## Why PostgreSQL Is Used
+Η εφαρμογή του κινητού μπορεί να δείχνει προειδοποιήσεις και ενδείξεις στην οθόνη, αλλά **δεν** αποφασίζει η ίδια τίποτα από τα παραπάνω.
 
-PostgreSQL is a strong fit because the system needs:
+## Γιατί PostgreSQL
 
-- Reliable transactional updates
-- Relational modeling for pads, movements, repairs, machines, and racks
-- Query power for dashboards and KPIs
-- Good Prisma support
+Η PostgreSQL ταιριάζει επειδή το σύστημα χρειάζεται:
 
-Charge/decharge and repair flows are stateful, so transactional consistency matters more than schema flexibility.
+- αξιόπιστες ενημερώσεις με συναλλαγές (transactions),
+- σχεσιακό μοντέλο για vacuum, κινήσεις, επισκευές, μηχανήματα και θέσεις,
+- ικανότητα σύνθετων ερωτημάτων για τους πίνακες ελέγχου και τις αναφορές.
 
-## Why MinIO / S3-Compatible Storage Is Used
+Οι ροές χρέωσης/αποχρέωσης και επισκευών εξαρτώνται από την τρέχουσα κατάσταση, οπότε η συνέπεια των συναλλαγών μετράει περισσότερο από την ευελιξία του σχήματος.
 
-Repair photos are binary assets and should not live directly in the relational database as large blobs for the main MVP design.
+## Γιατί MinIO / αποθήκευση συμβατή με S3
 
-Using MinIO locally and S3-compatible storage in production gives:
+Οι φωτογραφίες είναι δυαδικά αρχεία και δεν πρέπει να αποθηκεύονται ως μεγάλα blobs μέσα στη σχεσιακή βάση.
 
-- A consistent object-storage model across environments
-- Easier migration from local development to production
-- Clear separation between metadata in PostgreSQL and files in object storage
+Η χρήση MinIO — ή οποιασδήποτε αποθήκευσης συμβατής με S3 — δίνει:
 
-## Why Local Node.js Is Allowed for Development
+- ένα ενιαίο μοντέλο αποθήκευσης αρχείων σε όλα τα περιβάλλοντα,
+- εύκολη μετάβαση από τοπική εγκατάσταση σε άλλον πάροχο, χωρίς αλλαγή κώδικα,
+- καθαρό διαχωρισμό: τα **στοιχεία** της φωτογραφίας στην PostgreSQL, το **αρχείο** στην αποθήκευση αντικειμένων.
 
-Local Node.js on Windows is allowed because it makes day-to-day backend development faster and simpler for the team:
+Η βάση κρατά μόνο αναφορά στο αρχείο (όνομα, μέγεθος, ποιος το ανέβασε), ποτέ την ίδια την εικόνα.
 
-- Shorter edit-run-debug loop
-- Native IDE and terminal workflow on Windows
-- No requirement to place source code inside WSL file systems
+## Γιατί η παραγωγή τρέχει σε Docker
 
-This is a development convenience only. It does not change the production deployment model.
+Η εγκατάσταση παραμένει σε containers ώστε το σύστημα να συμπεριφέρεται προβλέψιμα και να μεταφέρεται εύκολα:
 
-## Why Production Still Uses Docker
+- ίδια συμπεριφορά σε κάθε διακομιστή,
+- απλή συσκευασία για εγκατάσταση και αναβάθμιση,
+- καθαρή διαχείριση εξαρτήσεων.
 
-Production must stay containerized so the backend runs in a predictable and portable environment.
+## Τι κάνει κάθε μέρος
 
-That gives:
+### Εφαρμογή Android
 
-- Reproducible runtime behavior
-- Easier deployment packaging
-- Environment consistency across servers
-- Cleaner dependency management for backend services
+- Σαρώνει κωδικούς QR.
+- Εμφανίζει τα στοιχεία κάθε vacuum.
+- Ξεκινά χρέωση, αποχρέωση και ενέργειες επισκευής.
+- Διαβάζει την τρέχουσα κατάσταση από το backend.
 
-The backend therefore needs to support both:
+### Backend (NestJS)
 
-1. Local development using host Node.js on Windows
-2. Containerized execution later through `backend/Dockerfile` and `docker-compose.yml`
-
-## Component Interaction
-
-### Flutter Android App
-
-- Scans QR codes
-- Shows pad details
-- Initiates charge, decharge, and repair actions
-- Reads current traceability state from the backend
-
-### NestJS Backend
-
-- Exposes APIs for traceability workflows
-- Validates all business rules
-- Persists source-of-truth records
-- Records movement history and audit logs
-- Coordinates photo metadata with object storage
+- Εκθέτει τα API για όλες τις ροές ιχνηλασιμότητας.
+- Ελέγχει κάθε επιχειρησιακό κανόνα.
+- Αποθηκεύει τις εγγραφές που αποτελούν την πηγή αλήθειας.
+- Καταγράφει ιστορικό κινήσεων και μητρώο ελέγχου.
+- Συντονίζει τα στοιχεία των φωτογραφιών με την αποθήκευση αρχείων.
+- Επιβάλλει την ταυτοποίηση χρηστών σε κάθε αίτημα.
 
 ### PostgreSQL
 
-- Stores pads, machines, racks, movements, repairs, users, statuses, and audit logs
-- Supports transactional state updates and reporting queries
+- Αποθηκεύει vacuum, μηχανήματα, θέσεις, κινήσεις, επισκευές, χρήστες, καταστάσεις και μητρώο ελέγχου.
+- Υποστηρίζει ενημερώσεις με συναλλαγές και ερωτήματα για αναφορές.
 
-### MinIO / S3-Compatible Storage
+### MinIO / αποθήκευση συμβατή με S3
 
-- Stores repair photo files
-- Returns object references for backend metadata records
+- Αποθηκεύει τα αρχεία των φωτογραφιών επισκευής.
+- Παραμένει **ιδιωτική**: δεν έχει δημόσια διαδρομή και ο φυλλομετρητής δεν επικοινωνεί ποτέ απευθείας μαζί της. Οι εικόνες περνούν από το backend.
 
-### Future Next.js Admin
+### Web διαχείριση (React)
 
-- Uses the same backend APIs
-- Focuses on dashboards, reporting, and master data management
+- Χρησιμοποιεί τα ίδια API με το κινητό.
+- Επικεντρώνεται σε πίνακες ελέγχου, αναφορές και διαχείριση βασικών δεδομένων.
+- Παρέχει τη διαχείριση λογαριασμών χρηστών, διαθέσιμη μόνο στον ρόλο διαχειριστή.
 
-## Local vs Production Model
+## Τοπική ανάπτυξη έναντι παραγωγής
 
-### Local Development
+### Ανάπτυξη
 
-- Backend process runs on host Node.js
-- PostgreSQL and MinIO run in Docker Desktop later
-- Source code stays in Windows folders
+Κατά την ανάπτυξη το backend μπορεί να τρέχει απευθείας με Node.js στον υπολογιστή του προγραμματιστή, με την PostgreSQL και το MinIO σε Docker. Αυτό συντομεύει τον κύκλο δοκιμών και δεν επηρεάζει σε τίποτα τον τρόπο εγκατάστασης στην παραγωγή.
 
-### Production
+### Παραγωγή
 
-- Backend runs inside a Docker container
-- Storage remains S3-compatible
-- Database remains PostgreSQL
-
-This keeps the team productive locally without sacrificing deployment consistency later.
+Όλα τα μέρη τρέχουν σε containers μέσω `docker-compose.prod.yml`. Η PostgreSQL και το MinIO δεν εκθέτουν καμία θύρα προς τα έξω· backend και διαχείριση δένονται στο `127.0.0.1` ώστε ένας reverse proxy της εταιρίας να αναλαμβάνει το HTTPS και να εκθέτει μόνο τις εγκεκριμένες διαδρομές.

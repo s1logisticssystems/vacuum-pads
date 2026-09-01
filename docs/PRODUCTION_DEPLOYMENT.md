@@ -1,32 +1,32 @@
-# Production Deployment Foundation
+# Εγκατάσταση σε παραγωγή
 
-This document describes the Docker production foundation for Vacuum Pads Traceability. It is a starting point for a controlled company-server installation, not a substitute for the final security review.
+Το έγγραφο περιγράφει την εγκατάσταση του Vacuum Pads Traceability με Docker σε εταιρικό διακομιστή. Αποτελεί τη βάση για μια ελεγχόμενη εγκατάσταση, όχι υποκατάστατο του τελικού ελέγχου ασφαλείας που θα κάνει ο οργανισμός σας.
 
-## Services
+## Υπηρεσίες
 
-`docker-compose.prod.yml` defines these services:
+Το `docker-compose.prod.yml` ορίζει τις εξής υπηρεσίες:
 
-- `postgres`: PostgreSQL 16 with persistent `postgres_data`.
-- `minio`: private MinIO object storage with persistent `minio_data`.
-- `migrate`: one-shot Prisma migration job using the backend `migration` Docker target.
-- `backend`: lean NestJS runtime image.
-- `admin`: Vite static build served by nginx with SPA fallback and optional `/api/` proxy.
+- `postgres`: PostgreSQL 16 με μόνιμο τόμο `postgres_data`.
+- `minio`: ιδιωτική αποθήκευση αντικειμένων MinIO με μόνιμο τόμο `minio_data`.
+- `migrate`: εργασία μιας εκτέλεσης που εφαρμόζει τις μεταβάσεις της βάσης. Περιέχει επίσης τα εργαλεία συντήρησης, όπως τη δημιουργία του πρώτου διαχειριστή.
+- `backend`: η εικόνα εκτέλεσης του API.
+- `admin`: το στατικό build της διαχείρισης, σερβιρισμένο από nginx με προώθηση του `/api/` προς το backend.
 
-PostgreSQL and MinIO are not published to public host ports by default. Backend and Admin are bound to `127.0.0.1` so a host-level or external reverse proxy can terminate TLS and expose only approved routes.
+Η PostgreSQL και το MinIO **δεν** δημοσιεύουν καμία θύρα προς τον διακομιστή. Το backend και η διαχείριση δένονται στο `127.0.0.1`, ώστε ένας reverse proxy — δικός σας ή του οργανισμού — να αναλαμβάνει το TLS και να εκθέτει μόνο τις εγκεκριμένες διαδρομές.
 
-The Flutter/mobile app is not part of the production Docker Compose stack. It is built and distributed separately as an APK/AAB, through MDM, or through a private store. Flutter analyze/test/build commands are CI/regression activities, not production deployment services.
+Η εφαρμογή Android δεν αποτελεί μέρος του Docker stack. Χτίζεται και διανέμεται ξεχωριστά ως APK, μέσω MDM ή ιδιωτικού καταλόγου εφαρμογών.
 
-## Environment File
+## Αρχείο ρυθμίσεων
 
-Copy the template and replace all `CHANGE_ME` values:
+Αντιγράψτε το πρότυπο και αντικαταστήστε κάθε τιμή `CHANGE_ME`:
 
 ```powershell
 Copy-Item .env.production.example .env.production
 ```
 
-Never commit `.env.production`. The backend validates production configuration at startup and refuses to run if required values are missing, still contain `CHANGE_ME`, or if `CORS_ORIGIN=*`.
+Μην καταχωρίσετε ποτέ το `.env.production` στο αποθετήριο. Το backend ελέγχει τις ρυθμίσεις κατά την εκκίνηση και **αρνείται να ξεκινήσει** αν λείπει υποχρεωτική τιμή, αν έχει μείνει κάποιο `CHANGE_ME`, ή αν το `CORS_ORIGIN` έχει τεθεί σε `*`.
 
-Required values include:
+Οι υποχρεωτικές τιμές περιλαμβάνουν:
 
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
 - `DATABASE_URL`
@@ -37,113 +37,110 @@ Required values include:
 - `S3_USE_SSL=false`
 - `NODE_ENV=production`
 - `PORT=3000`
-- `ADMIN_PUBLIC_URL`
-- `BACKEND_PUBLIC_URL`
+- `ADMIN_PUBLIC_URL`, `BACKEND_PUBLIC_URL`
 - `CORS_ORIGIN`
-- `FIREBASE_SERVICE_ACCOUNT_PATH` when Firebase notifications are enabled
+- `JWT_SECRET` — υπογράφει τα διακριτικά σύνδεσης· τουλάχιστον 32 χαρακτήρες
+- `FIREBASE_SERVICE_ACCOUNT_PATH` — μόνο αν ενεργοποιηθούν οι ειδοποιήσεις Firebase
 
-The Admin website must not receive MinIO credentials. Admin receives only backend-generated signed URLs for repair photos.
+Η ιστοσελίδα διαχείρισης δεν λαμβάνει ποτέ διαπιστευτήρια του MinIO.
 
-## Photo Storage
+## Αποθήκευση φωτογραφιών
 
-Production fault photos are stored in MinIO/S3, not on host filesystem paths. The backend uses only `S3_*` environment variables to reach MinIO and creates signed view URLs for Admin. The MinIO bucket must remain private.
+Οι φωτογραφίες βλαβών αποθηκεύονται στο MinIO, όχι σε φακέλους του διακομιστή. Το backend φτάνει στην αποθήκευση αποκλειστικά μέσω των μεταβλητών `S3_*`, και οι εικόνες διοχετεύονται προς τον φυλλομετρητή από το ίδιο το backend. Ο κάδος (bucket) παραμένει ιδιωτικός και δεν αποκτά ποτέ δημόσια διαδρομή.
 
-Production behavior is fail-closed:
+Στην παραγωγή η συμπεριφορά είναι «αποτυγχάνει κλειστά»:
 
-- uploads use configured MinIO/S3 storage only
-- filesystem fallback is disabled
-- Admin photo viewing uses signed URLs only
-- public URL fallback is disabled
-- missing or invalid signing configuration fails clearly instead of exposing private objects
+- τα ανεβάσματα χρησιμοποιούν μόνο τη ρυθμισμένη αποθήκευση,
+- η εναλλακτική αποθήκευση σε αρχεία του διακομιστή είναι απενεργοποιημένη,
+- ελλιπής ή εσφαλμένη ρύθμιση προκαλεί σαφές σφάλμα αντί να εκθέσει ιδιωτικά αρχεία.
 
-Signed repair-photo view URLs currently expire after 10 minutes. Admin never receives MinIO credentials, and no public bucket is required.
-
-If MinIO service-account credentials do not have bucket-create permissions, create the bucket manually before first upload:
+Αν ο λογαριασμός υπηρεσίας του MinIO δεν έχει δικαίωμα δημιουργίας κάδου, δημιουργήστε τον χειροκίνητα πριν το πρώτο ανέβασμα:
 
 ```text
 vacuum-photos
 ```
 
-## First Deployment
+## Πρώτη εγκατάσταση
 
-Validate the compose file:
+Έλεγχος του αρχείου σύνθεσης:
 
 ```powershell
 docker compose --env-file .env.production -f docker-compose.prod.yml config
 ```
 
-Build images:
+Δημιουργία εικόνων:
 
 ```powershell
 docker compose --env-file .env.production -f docker-compose.prod.yml build
 ```
 
-Start stateful services:
+Εκκίνηση των υπηρεσιών δεδομένων:
 
 ```powershell
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d postgres minio
 ```
 
-Run migrations:
+Εφαρμογή μεταβάσεων βάσης:
 
 ```powershell
 docker compose --env-file .env.production -f docker-compose.prod.yml up --build migrate
 ```
 
-Start application services:
+Εκκίνηση των υπηρεσιών εφαρμογής:
 
 ```powershell
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build backend admin
 ```
 
-## Health Checks
+Τέλος, δημιουργήστε τον πρώτο διαχειριστή. Χωρίς αυτόν κανείς δεν μπορεί να συνδεθεί — οι αναλυτικές οδηγίες βρίσκονται στο `USER_MANAGEMENT.md`.
 
-From the deployment host:
+## Έλεγχοι λειτουργίας
+
+Από τον διακομιστή:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:3000/health
 Invoke-RestMethod http://127.0.0.1:3000/health/database
 ```
 
-Also verify:
+Επιβεβαιώστε επίσης ότι:
 
-- Admin page through the reverse proxy or `http://127.0.0.1:8080`.
-- SSE endpoint `/events/admin` through the same route used by Admin.
-- MinIO bucket exists and remains private.
-- A mobile photo upload succeeds.
-- `GET /repairs/:repairId/photos` returns signed URLs only.
-- A photo row in Admin Movements opens through a signed URL.
-- The migration job exits with code 0 before backend traffic is allowed.
+- Η σελίδα διαχείρισης ανοίγει μέσω του reverse proxy ή στο `http://127.0.0.1:8080`.
+- Η σύνδεση χρήστη λειτουργεί και τα υπόλοιπα endpoints απαντούν `401` χωρίς σύνδεση.
+- Η ζωντανή ενημέρωση (`/events/admin`) λειτουργεί μέσω της ίδιας διαδρομής που χρησιμοποιεί η διαχείριση.
+- Ο κάδος του MinIO υπάρχει και παραμένει ιδιωτικός.
+- Ένα ανέβασμα φωτογραφίας από το κινητό ολοκληρώνεται.
+- Μια φωτογραφία ανοίγει από τη σελίδα διαχείρισης.
+- Η εργασία μεταβάσεων ολοκληρώθηκε επιτυχώς πριν επιτραπεί κίνηση προς το backend.
 
-## Admin API Routing
+## Δρομολόγηση του API
 
-The admin nginx container serves the SPA and proxies `/api/` to `backend:3000`.
+Το container της διαχείρισης σερβίρει τη σελίδα και προωθεί το `/api/` προς το `backend:3000`.
 
-Two supported production options:
+Δύο υποστηριζόμενες επιλογές:
 
-- Set the Admin backend URL to the public backend URL, for example `https://vacuum-api.example.com`.
-- Use same-origin proxy and set it to `https://vacuum-admin.example.com/api`.
+- Ορίζετε τη διεύθυνση backend στη διαχείριση ως το δημόσιο URL του API, π.χ. `https://vacuum-api.example.com`.
+- Ή χρησιμοποιείτε την προώθηση ίδιας προέλευσης και τη θέτετε σε `https://vacuum-admin.example.com/api`.
 
-The second option keeps browser traffic on one public origin while the nginx container strips `/api/` before forwarding to the backend.
+Η δεύτερη επιλογή κρατά όλη την κίνηση του φυλλομετρητή σε μία δημόσια διεύθυνση και δεν απαιτεί ρύθμιση CORS. Είναι η προεπιλογή.
 
-The bundled admin nginx config also proxies `/api/events/` to backend `/events/` with buffering disabled. If a company reverse proxy such as Cloudflare, nginx, Caddy, or a load balancer sits in front of Admin/Backend, it must not buffer the SSE route and must allow long-lived responses for `/events/admin`.
+Η ενσωματωμένη ρύθμιση nginx προωθεί επίσης το `/api/events/` προς το `/events/` του backend, χωρίς προσωρινή αποθήκευση. **Αν μπροστά από το σύστημα υπάρχει reverse proxy της εταιρίας** (Cloudflare, nginx, Caddy, ή load balancer), δεν πρέπει να αποθηκεύει προσωρινά αυτή τη διαδρομή και πρέπει να επιτρέπει μακρόβιες συνδέσεις για το `/events/admin`.
 
-Use strict CORS in production:
+Για το CORS στην παραγωγή:
 
-- `CORS_ORIGIN` should list only approved Admin/mobile/API origins.
-- Do not use `*` in production.
-- If using same-origin Admin proxy, ensure `/api/` and `/api/events/` are reachable from the browser.
+- Το `CORS_ORIGIN` να απαριθμεί μόνο τις εγκεκριμένες διευθύνσεις.
+- Ποτέ `*`.
 
-## Update Workflow
+## Διαδικασία αναβάθμισης
 
-Always back up before updating:
+Πάντα κρατήστε αντίγραφο πριν:
 
 ```powershell
 .\scripts\backup-postgres.ps1 -EnvFile .env.production
 .\scripts\backup-minio.ps1 -EnvFile .env.production
 ```
 
-Then deploy the new version:
+Έπειτα εγκαταστήστε τη νέα έκδοση:
 
 ```powershell
 docker compose --env-file .env.production -f docker-compose.prod.yml build
@@ -152,66 +149,61 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
 ```
 
-Do not run `docker compose down -v` in production. That deletes named volumes and can destroy database and photo data. Code updates must never remove `postgres_data` or `minio_data`.
+**Μην εκτελέσετε ποτέ `docker compose down -v` στην παραγωγή.** Διαγράφει τους τόμους και μαζί τη βάση και τις φωτογραφίες. Καμία ενημέρωση κώδικα δεν πρέπει να αφαιρεί τα `postgres_data` ή `minio_data`.
 
-## Backup Workflow
-
-PostgreSQL:
+## Αντίγραφα ασφαλείας
 
 ```powershell
 .\scripts\backup-postgres.ps1 -EnvFile .env.production
-```
-
-MinIO bucket:
-
-```powershell
 .\scripts\backup-minio.ps1 -EnvFile .env.production
 ```
 
-Store backups outside the application server when possible. A valid recovery point needs both the PostgreSQL dump and the matching MinIO bucket backup. Deleted photos cannot be restored unless a matching MinIO backup exists.
+Σε Linux υπάρχουν οι αντίστοιχες εκδοχές `.sh`. Φυλάξτε τα αντίγραφα εκτός του διακομιστή εφαρμογής. Ένα έγκυρο σημείο επαναφοράς χρειάζεται **και** το αρχείο της PostgreSQL **και** το αντίστοιχο αντίγραφο του MinIO. Διαγραμμένες φωτογραφίες δεν ανακτώνται χωρίς αντίγραφο.
 
-## Restore Notes
+Πλήρης οδηγός, με χρονοπρογραμματισμό και διαδικασίες επαναφοράς: `BACKUP_AND_RESTORE.md`.
 
-Stop application writes before restoring:
+## Επαναφορά
+
+Σταματήστε τις εγγραφές πριν την επαναφορά:
 
 ```powershell
 docker compose --env-file .env.production -f docker-compose.prod.yml stop backend admin
 ```
 
-Restore PostgreSQL into a clean database using `pg_restore` from the `postgres` container. Restore MinIO using `minio/mc mirror` back into the private bucket. Restart backend and admin only after both data stores match the same backup point.
+Επαναφέρετε την PostgreSQL με `pg_restore` και το MinIO με `mc mirror` πίσω στον ιδιωτικό κάδο. Ξεκινήστε ξανά backend και διαχείριση μόνο αφού και τα δύο αντιστοιχούν στο ίδιο σημείο αντιγράφου.
 
-Restore drill checklist:
+### Άσκηση επαναφοράς
 
-1. Pick a non-production test host or isolated Docker project name.
-2. Start empty PostgreSQL and MinIO volumes.
-3. Restore the PostgreSQL dump.
-4. Restore the matching MinIO bucket backup.
-5. Start migrate/backend/admin with the matching application version.
-6. Verify `/health`, `/health/database`, Admin page load, SSE `/events/admin`, a movement photo gallery, and a mobile workflow smoke test.
-7. Record restore duration and any manual steps needed.
+1. Επιλέξτε δοκιμαστικό διακομιστή ή απομονωμένο όνομα έργου Docker.
+2. Ξεκινήστε με άδειους τόμους PostgreSQL και MinIO.
+3. Επαναφέρετε το αρχείο της βάσης.
+4. Επαναφέρετε το αντίστοιχο αντίγραφο του MinIO.
+5. Ξεκινήστε τις υπηρεσίες με την αντίστοιχη έκδοση της εφαρμογής.
+6. Επιβεβαιώστε `/health`, `/health/database`, τη σύνδεση χρήστη, τη φόρτωση της σελίδας διαχείρισης, τη ζωντανή ενημέρωση, μια φωτογραφία επισκευής, και μια δοκιμαστική ροή από το κινητό.
+7. Καταγράψτε τη διάρκεια της επαναφοράς και τυχόν χειροκίνητα βήματα.
 
-## Rollback
+## Επαναφορά προηγούμενης έκδοσης
 
-For app-only rollback:
+Για επαναφορά μόνο της εφαρμογής:
 
-1. Set `IMAGE_TAG` to the previous known-good image tag.
-2. Run `docker compose --env-file .env.production -f docker-compose.prod.yml up -d backend admin`.
+1. Θέστε το `IMAGE_TAG` στην προηγούμενη γνωστή καλή έκδοση.
+2. Εκτελέστε `docker compose --env-file .env.production -f docker-compose.prod.yml up -d backend admin`.
 
-For rollback after a database migration:
+Αν έχει μεσολαβήσει μετάβαση βάσης:
 
-1. Stop backend/admin.
-2. Restore the PostgreSQL backup taken before the migration.
-3. Restore the matching MinIO backup if photo writes happened after that point.
-4. Start the previous image tag.
+1. Σταματήστε backend και διαχείριση.
+2. Επαναφέρετε το αντίγραφο της βάσης που πάρθηκε **πριν** τη μετάβαση.
+3. Επαναφέρετε το αντίστοιχο αντίγραφο MinIO, αν γράφτηκαν φωτογραφίες μετά από εκείνο το σημείο.
+4. Ξεκινήστε με την προηγούμενη έκδοση εικόνας.
 
-Prisma migrations are not assumed to be reversible. Treat pre-migration backups as mandatory.
+Οι μεταβάσεις βάσης δεν θεωρούνται αντιστρέψιμες. Τα αντίγραφα πριν από κάθε μετάβαση είναι υποχρεωτικά.
 
-## Remaining Production Hardening
+## Τι απομένει από την πλευρά σας
 
-- Put TLS in front of Admin and Backend with a company-approved reverse proxy.
-- Replace all placeholder secrets.
-- Use a private MinIO bucket and preferably a limited service account for backend object access.
-- Restrict `CORS_ORIGIN` to approved Admin and mobile/API origins.
-- Decide whether Firebase service account files are mounted as secrets or disabled.
-- Add a formal backup retention policy and periodic restore drills.
-- Add monitoring for `/health`, `/health/database`, container restarts, disk usage, and backup freshness.
+- Τοποθέτηση TLS μπροστά από τη διαχείριση και το backend, με reverse proxy εγκεκριμένο από τον οργανισμό.
+- Αντικατάσταση όλων των προσωρινών μυστικών, συμπεριλαμβανομένου του `JWT_SECRET`.
+- Ιδιωτικός κάδος MinIO και, κατά προτίμηση, λογαριασμός υπηρεσίας με περιορισμένα δικαιώματα.
+- Περιορισμός του `CORS_ORIGIN` στις εγκεκριμένες διευθύνσεις.
+- Απόφαση για τις ειδοποιήσεις Firebase: αρχείο λογαριασμού ως μυστικό, ή απενεργοποίηση.
+- Πολιτική διατήρησης αντιγράφων και περιοδικές ασκήσεις επαναφοράς.
+- Παρακολούθηση των `/health`, `/health/database`, των επανεκκινήσεων containers, του χώρου δίσκου και της φρεσκάδας των αντιγράφων.

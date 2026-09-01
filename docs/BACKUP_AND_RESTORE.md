@@ -1,49 +1,40 @@
-# Backup and Restore — Operations Guide
+# Αντίγραφα ασφαλείας και επαναφορά — Οδηγός λειτουργίας
 
-Guide for the team running this installation. Covers what to back up, how to run
-and schedule the scripts, how to change where backups are written, and how to
-restore. No knowledge of the application code is required.
+Οδηγός για την ομάδα που λειτουργεί την εγκατάσταση. Καλύπτει τι πρέπει να κρατάτε, πώς εκτελούνται και προγραμματίζονται τα scripts, πώς αλλάζει ο φάκελος προορισμού και πώς γίνεται η επαναφορά. Δεν προϋποθέτει γνώση του κώδικα.
 
-Every command below has been run against a live stack, including the restores.
+Κάθε εντολή που ακολουθεί έχει εκτελεστεί σε ζωντανό σύστημα, συμπεριλαμβανομένων των επαναφορών.
 
 ---
 
-## 1. What has to be backed up
+## 1. Τι πρέπει να κρατάμε
 
-The application keeps state in two places. **Both are needed** — one without the
-other gives you an unusable system.
+Η εφαρμογή αποθηκεύει δεδομένα σε δύο σημεία. **Χρειάζονται και τα δύο** — το ένα χωρίς το άλλο δίνει σύστημα που δεν λειτουργεί.
 
-| What | Where it lives | Backed up by |
+| Τι | Πού βρίσκεται | Ποιο script το καλύπτει |
 |---|---|---|
-| Business data (pads, machines, movements, repairs, users, audit log) | PostgreSQL container, Docker volume `*_postgres_data` | `backup-postgres` |
-| Repair photos (the image files) | MinIO container, Docker volume `*_minio_data` | `backup-minio` |
+| Επιχειρησιακά δεδομένα (vacuum, μηχανήματα, κινήσεις, επισκευές, χρήστες, μητρώο ελέγχου) | Container PostgreSQL, τόμος `*_postgres_data` | `backup-postgres` |
+| Φωτογραφίες επισκευών (τα ίδια τα αρχεία) | Container MinIO, τόμος `*_minio_data` | `backup-minio` |
 
-The database stores only a *reference* to each photo (filename, size, bucket) —
-never the image itself. Restoring the database without the photo store leaves
-records pointing at files that no longer exist.
+Η βάση αποθηκεύει μόνο μια *αναφορά* σε κάθε φωτογραφία (όνομα αρχείου, μέγεθος, θέση) — ποτέ την ίδια την εικόνα. Επαναφορά της βάσης χωρίς τις φωτογραφίες αφήνει εγγραφές που δείχνουν σε αρχεία που δεν υπάρχουν πια.
 
-Nothing else needs backing up: application code comes from the Git repository,
-and configuration lives in `.env.production`, which you should store in your own
-secret management alongside other production credentials.
+Τίποτε άλλο δεν χρειάζεται αντίγραφο: ο κώδικας προέρχεται από το αποθετήριο Git, και οι ρυθμίσεις βρίσκονται στο `.env.production`, το οποίο πρέπει να φυλάσσετε στο δικό σας σύστημα διαχείρισης μυστικών μαζί με τα υπόλοιπα διαπιστευτήρια παραγωγής.
 
 ---
 
-## 2. Choosing the scripts for your platform
+## 2. Ποια scripts αφορούν το λειτουργικό σας
 
-Both variants do exactly the same thing. Pick by operating system:
+Και οι δύο εκδοχές κάνουν ακριβώς το ίδιο. Επιλέξτε ανάλογα με το λειτουργικό σύστημα:
 
-| Platform | Scripts |
+| Πλατφόρμα | Scripts |
 |---|---|
 | Linux, macOS | `scripts/backup-postgres.sh`, `scripts/backup-minio.sh` |
 | Windows | `scripts/backup-postgres.ps1`, `scripts/backup-minio.ps1` |
 
-The `.sh` scripts also run on Windows under Git Bash / WSL.
+Τα scripts `.sh` τρέχουν και σε Windows μέσω Git Bash ή WSL.
 
-Requirements: Docker and Docker Compose, and the stack must be running. The
-scripts talk to the running containers — they do not need database or object
-storage tools installed on the host.
+Προϋποθέσεις: Docker και Docker Compose, και το σύστημα να είναι σε λειτουργία. Τα scripts επικοινωνούν με τα ενεργά containers — δεν απαιτούν εγκατεστημένα εργαλεία βάσης ή αποθήκευσης στον διακομιστή.
 
-Make the shell scripts executable once after cloning:
+Μετά την κλωνοποίηση, δώστε δικαίωμα εκτέλεσης στα scripts κελύφους μία φορά:
 
 ```bash
 chmod +x scripts/*.sh
@@ -51,23 +42,21 @@ chmod +x scripts/*.sh
 
 ---
 
-## 3. Where the scripts live
+## 3. Πού βρίσκονται τα scripts
 
-In the folder you cloned the repository into — on the host filesystem, **not**
-inside Docker. For example, after cloning into `/opt`:
+Στον φάκελο όπου κλωνοποιήσατε το αποθετήριο — στο σύστημα αρχείων του διακομιστή, **όχι** μέσα στο Docker. Για παράδειγμα, μετά από κλωνοποίηση στο `/opt`:
 
 ```text
 /opt/vacuum-pads/scripts/backup-minio.sh
 ```
 
-They are ordinary text files. Open them in any editor.
+Είναι απλά αρχεία κειμένου. Ανοίγουν με οποιονδήποτε επεξεργαστή.
 
 ---
 
-## 4. Running a backup
+## 4. Εκτέλεση αντιγράφου
 
-Run from the repository root, so the script finds `docker-compose.prod.yml` and
-`.env.production`.
+Εκτελέστε τα από τον ριζικό φάκελο του αποθετηρίου, ώστε να βρουν τα `docker-compose.prod.yml` και `.env.production`.
 
 **Linux / macOS**
 
@@ -83,30 +72,26 @@ Run from the repository root, so the script finds `docker-compose.prod.yml` and
 .\scripts\backup-minio.ps1
 ```
 
-By default both write into a `backups/` folder next to the scripts:
+Εξ ορισμού γράφουν σε έναν φάκελο `backups/` δίπλα στα scripts:
 
 ```text
 backups/
-├── postgres-20260901-095313.dump          the database
-└── minio-20260901-095521/                 the photos
+├── postgres-20260901-095313.dump          η βάση δεδομένων
+└── minio-20260901-095521/                 οι φωτογραφίες
     └── repair-photos/
-        └── <repair-id>/
+        └── <κωδικός-επισκευής>/
             └── 2026-09-01T06-31-09-626Z-119968c6.png
 ```
 
-Each run creates a new timestamped entry; nothing is overwritten.
+Κάθε εκτέλεση δημιουργεί νέα εγγραφή με χρονοσήμανση· τίποτα δεν αντικαθίσταται.
 
-The photo backup contains **ordinary image files** in their original folder
-structure, not MinIO's internal storage format. They open with any image viewer,
-without MinIO involved.
+Το αντίγραφο των φωτογραφιών περιέχει **κανονικά αρχεία εικόνας** στην αρχική δομή φακέλων, όχι την εσωτερική μορφή αποθήκευσης του MinIO. Ανοίγουν με οποιοδήποτε πρόγραμμα προβολής, χωρίς να χρειάζεται το MinIO.
 
 ---
 
-## 5. Changing where backups are written
+## 5. Αλλαγή του φακέλου προορισμού
 
-You do not need to edit the scripts. Every script accepts an output folder,
-which is created if it does not exist. Any path works — another disk, a mounted
-network share, a NAS.
+Δεν χρειάζεται να επεξεργαστείτε τα scripts. Καθένα δέχεται φάκελο προορισμού, τον οποίο δημιουργεί αν δεν υπάρχει. Δέχεται οποιαδήποτε διαδρομή — άλλο δίσκο, δικτυακό κοινόχρηστο φάκελο, NAS.
 
 **Linux / macOS**
 
@@ -122,17 +107,14 @@ network share, a NAS.
 .\scripts\backup-minio.ps1 -OutputDir "D:\backups\vacuum"
 ```
 
-Prefer the parameter over editing the file: a local edit will conflict on the
-next `git pull`. If you do want to change the built-in default permanently, it
-is **line 4** of each script:
+Προτιμήστε την παράμετρο αντί για επεξεργασία του αρχείου: μια τοπική αλλαγή θα δημιουργήσει σύγκρουση στην επόμενη ενημέρωση του κώδικα. Αν παρ' όλα αυτά θέλετε να αλλάξετε μόνιμα την προεπιλογή, βρίσκεται στη **γραμμή 4** κάθε script:
 
 ```text
 OUTPUT_DIR="backups"                 # .sh
 [string]$OutputDir = 'backups'       # .ps1
 ```
 
-Two further options exist for non-standard installations, defaulting to
-`docker-compose.prod.yml` and `.env.production`:
+Υπάρχουν δύο ακόμη παράμετροι για μη τυπικές εγκαταστάσεις, με προεπιλογές `docker-compose.prod.yml` και `.env.production`:
 
 ```bash
 ./scripts/backup-minio.sh --compose-file docker-compose.prod.yml --env-file .env.production
@@ -142,14 +124,13 @@ Two further options exist for non-standard installations, defaulting to
 .\scripts\backup-minio.ps1 -ComposeFile docker-compose.prod.yml -EnvFile .env.production
 ```
 
-Run any `.sh` script with `--help` for its usage.
+Εκτελέστε οποιοδήποτε script `.sh` με `--help` για τις οδηγίες χρήσης του.
 
 ---
 
-## 6. Scheduling
+## 6. Χρονοπρογραμματισμός
 
-Back up **both** on the same schedule, so the database and the photos stay in
-step. Daily outside working hours is a reasonable starting point.
+Προγραμματίστε **και τα δύο** στο ίδιο χρονικό σημείο, ώστε η βάση και οι φωτογραφίες να αντιστοιχούν μεταξύ τους. Μία φορά την ημέρα, εκτός ωραρίου λειτουργίας, είναι λογική αφετηρία.
 
 ### Linux — cron
 
@@ -162,48 +143,41 @@ crontab -e
 40 2 * * * cd /opt/vacuum-pads && ./scripts/backup-minio.sh    --output-dir /srv/backups/vacuum >> /var/log/vacuum-backup.log 2>&1
 ```
 
-The `cd` matters: the scripts resolve the compose and env files relative to the
-working directory. The user running cron must be able to use Docker.
+Το `cd` έχει σημασία: τα scripts εντοπίζουν τα αρχεία ρυθμίσεων σε σχέση με τον τρέχοντα φάκελο. Ο χρήστης που εκτελεί το cron πρέπει να έχει δικαίωμα χρήσης του Docker.
 
-### Windows — Task Scheduler
+### Windows — Χρονοπρογραμματιστής εργασιών
 
-Create a task running daily, with:
+Δημιουργήστε εργασία που εκτελείται καθημερινά, με:
 
-- Program: `powershell.exe`
-- Arguments:
+- Πρόγραμμα: `powershell.exe`
+- Ορίσματα:
   `-NoProfile -ExecutionPolicy Bypass -File "C:\apps\vacuum-pads\scripts\backup-postgres.ps1" -OutputDir "D:\backups\vacuum"`
-- Start in: `C:\apps\vacuum-pads`
+- Έναρξη στον φάκελο: `C:\apps\vacuum-pads`
 
-Add a second task for `backup-minio.ps1`. Set both to "Run whether user is
-logged on or not", under an account that can use Docker.
+Προσθέστε δεύτερη εργασία για το `backup-minio.ps1`. Ορίστε και τις δύο ως «Εκτέλεση είτε ο χρήστης είναι συνδεδεμένος είτε όχι», με λογαριασμό που έχει δικαίωμα χρήσης του Docker.
 
-### Retention
+### Πολιτική διατήρησης
 
-Neither script deletes old backups — that is deliberate, so nothing is removed
-without your policy deciding it. To keep the last 30 days:
+Κανένα script δεν διαγράφει παλιά αντίγραφα — σκόπιμα, ώστε να μην αφαιρείται τίποτα χωρίς να το αποφασίσει η δική σας πολιτική. Για διατήρηση των τελευταίων 30 ημερών:
 
 ```bash
 find /srv/backups/vacuum -maxdepth 1 -name 'postgres-*.dump' -mtime +30 -delete
 find /srv/backups/vacuum -maxdepth 1 -name 'minio-*' -type d -mtime +30 -exec rm -rf {} +
 ```
 
-Backups contain real operational data and repair photographs. Store them with
-the same protection as the production database, and keep a copy off the machine
-that runs the application.
+Τα αντίγραφα περιέχουν πραγματικά επιχειρησιακά δεδομένα και φωτογραφίες επισκευών. Φυλάξτε τα με την ίδια προστασία που δίνετε στη βάση παραγωγής, και κρατήστε αντίγραφο **εκτός** του μηχανήματος που τρέχει την εφαρμογή.
 
 ---
 
-## 7. Restoring
+## 7. Επαναφορά
 
-> Restoring the database **overwrites current data**. Take a fresh backup first,
-> and confirm you are pointing at the intended environment.
+> Η επαναφορά της βάσης **αντικαθιστά τα τρέχοντα δεδομένα**. Πάρτε πρώτα φρέσκο αντίγραφο και βεβαιωθείτε ότι στοχεύετε στο σωστό περιβάλλον.
 
-Restore both parts from the *same* backup run where possible, so photo records
-and photo files match.
+Επαναφέρετε και τα δύο μέρη από την **ίδια** εκτέλεση αντιγράφου όπου είναι δυνατό, ώστε οι εγγραφές των φωτογραφιών να αντιστοιχούν στα αρχεία.
 
-### 7.1 Database
+### 7.1 Βάση δεδομένων
 
-Copy the dump into the running PostgreSQL container and restore it:
+Αντιγράψτε το αρχείο μέσα στο container της PostgreSQL και επαναφέρετέ το:
 
 ```bash
 CONTAINER=$(docker compose --env-file .env.production -f docker-compose.prod.yml ps -q postgres)
@@ -213,14 +187,11 @@ docker exec "$CONTAINER" pg_restore -U vacuum_user -d vacuum_traceability --clea
 docker exec "$CONTAINER" rm -f /tmp/restore.dump
 ```
 
-`--clean --if-exists` drops existing objects before recreating them. Without it,
-the restore fails on tables that already exist.
+Οι παράμετροι `--clean --if-exists` διαγράφουν τα υπάρχοντα αντικείμενα πριν τα ξαναδημιουργήσουν. Χωρίς αυτές, η επαναφορά αποτυγχάνει σε πίνακες που ήδη υπάρχουν.
 
-Replace `vacuum_user` and `vacuum_traceability` if you changed `POSTGRES_USER`
-or `POSTGRES_DB` in `.env.production`.
+Αντικαταστήστε τα `vacuum_user` και `vacuum_traceability` αν αλλάξατε τα `POSTGRES_USER` ή `POSTGRES_DB` στο `.env.production`.
 
-**Testing a restore without touching production** — recommended before you rely
-on a backup. Restore into a scratch database and inspect it:
+**Δοκιμή επαναφοράς χωρίς να αγγίξετε την παραγωγή** — συνιστάται πριν βασιστείτε σε ένα αντίγραφο. Επαναφέρετε σε προσωρινή βάση και ελέγξτε την:
 
 ```bash
 docker exec "$CONTAINER" psql -U vacuum_user -d postgres -c "CREATE DATABASE restore_test;"
@@ -229,9 +200,9 @@ docker exec "$CONTAINER" psql -U vacuum_user -d restore_test -c 'SELECT count(*)
 docker exec "$CONTAINER" psql -U vacuum_user -d postgres -c "DROP DATABASE restore_test;"
 ```
 
-### 7.2 Photos
+### 7.2 Φωτογραφίες
 
-Mirror the backup folder back into the bucket:
+Αντιγράψτε τον φάκελο του αντιγράφου πίσω στην αποθήκευση:
 
 ```bash
 docker run --rm \
@@ -243,66 +214,53 @@ docker run --rm \
   -c 'mc alias set prod "$S3_ENDPOINT" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" && mc mirror --overwrite /restore "prod/$S3_BUCKET"'
 ```
 
-On Windows Git Bash, replace `$(pwd)/backups/...` with a native path such as
-`C:/apps/vacuum-pads/backups/minio-20260901-095521`, and prefix the command with
-`MSYS_NO_PATHCONV=1`. Git Bash rewrites Unix-style paths, which makes Docker
-mount an empty folder.
+Σε Windows με Git Bash, αντικαταστήστε το `$(pwd)/backups/...` με πλήρη διαδρομή Windows, π.χ. `C:/apps/vacuum-pads/backups/minio-20260901-095521`, και προσθέστε το πρόθεμα `MSYS_NO_PATHCONV=1` στην εντολή. Το Git Bash μετατρέπει τις διαδρομές τύπου Unix, με αποτέλεσμα το Docker να προσαρτήσει άδειο φάκελο.
 
-### 7.3 After restoring
+### 7.3 Μετά την επαναφορά
 
 ```bash
 curl http://localhost:3000/health/database
 ```
 
-Then open the admin site and confirm the vacuum counts and a repair photo both
-display.
+Έπειτα ανοίξτε τη σελίδα διαχείρισης και επιβεβαιώστε ότι εμφανίζονται σωστά τα πλήθη των vacuum και ότι ανοίγει μια φωτογραφία επισκευής.
 
 ---
 
-## 8. Verifying a backup is good
+## 8. Πώς επιβεβαιώνετε ότι ένα αντίγραφο είναι καλό
 
-A backup that has never been restored is an assumption, not a safeguard. Once a
-quarter, restore the latest backup into a scratch database (7.1) and confirm the
-row counts look right.
+Ένα αντίγραφο που δεν έχει επαναφερθεί ποτέ είναι υπόθεση, όχι εγγύηση. Μία φορά ανά τρίμηνο, επαναφέρετε το πιο πρόσφατο αντίγραφο σε προσωρινή βάση (ενότητα 7.1) και επιβεβαιώστε ότι τα πλήθη εγγραφών είναι λογικά.
 
-Quick sanity checks:
+Γρήγοροι έλεγχοι:
 
-| Check | Command | Expected |
+| Έλεγχος | Εντολή | Αναμενόμενο |
 |---|---|---|
-| Dump is a valid archive | `pg_restore -l backups/postgres-*.dump` | a list of tables, no error |
-| Dump is not truncated | `head -c 5 backups/postgres-*.dump` | starts with `PGDMP` |
-| Photos are real images | open any `.png` under `backups/minio-*/` | the image displays |
-| Backup is not empty | `du -sh backups/minio-*/` | grows as photos accumulate |
+| Το αρχείο είναι έγκυρο | `pg_restore -l backups/postgres-*.dump` | Λίστα πινάκων, χωρίς σφάλμα |
+| Δεν είναι κομμένο | `head -c 5 backups/postgres-*.dump` | Ξεκινά με `PGDMP` |
+| Οι φωτογραφίες είναι πραγματικές | Ανοίξτε ένα `.png` από το `backups/minio-*/` | Η εικόνα εμφανίζεται |
+| Το αντίγραφο δεν είναι άδειο | `du -sh backups/minio-*/` | Μεγαλώνει καθώς προστίθενται φωτογραφίες |
 
 ---
 
-## 9. Troubleshooting
+## 9. Αντιμετώπιση προβλημάτων
 
-**"Postgres container is not running for the selected compose project."**
-The stack is down, or you ran the script from the wrong folder. Run from the
-repository root and check `docker compose -f docker-compose.prod.yml --env-file .env.production ps`.
+**«Postgres container is not running for the selected compose project.»**
+Το σύστημα είναι σταματημένο, ή εκτελέσατε το script από λάθος φάκελο. Εκτελέστε το από τον ριζικό φάκελο και ελέγξτε με `docker compose -f docker-compose.prod.yml --env-file .env.production ps`.
 
-**"Compose file not found" / "Environment file not found"**
-Same cause — run from the repository root, or pass `--compose-file` /
-`--env-file` explicitly.
+**«Compose file not found» / «Environment file not found»**
+Ίδια αιτία — εκτελέστε από τον ριζικό φάκελο, ή δώστε ρητά τα `--compose-file` / `--env-file`.
 
-**"Backup folder was not created … the volume mount did not reach the host filesystem."**
-Raised by `backup-minio.sh` when Docker mounted something other than your
-folder, which would otherwise report success while writing nothing. Usually a
-path Docker cannot resolve. On Windows use the PowerShell script, or run from
-WSL. On Linux, check that the output folder is on a filesystem Docker can mount
-and that the user may write to it.
+**«Backup folder was not created … the volume mount did not reach the host filesystem.»**
+Εμφανίζεται από το `backup-minio.sh` όταν το Docker προσάρτησε κάτι διαφορετικό από τον φάκελό σας — κατάσταση που διαφορετικά θα ανέφερε επιτυχία χωρίς να γράψει τίποτα. Συνήθως πρόκειται για διαδρομή που το Docker δεν αναγνωρίζει. Σε Windows χρησιμοποιήστε το script PowerShell, ή εκτελέστε από WSL. Σε Linux, ελέγξτε ότι ο φάκελος βρίσκεται σε σύστημα αρχείων που το Docker μπορεί να προσαρτήσει και ότι ο χρήστης έχει δικαίωμα εγγραφής.
 
-**MinIO backup folder is empty**
-Normal when no repair photos have been uploaded yet. Confirm with:
+**Ο φάκελος των φωτογραφιών είναι άδειος**
+Φυσιολογικό αν δεν έχει ανέβει καμία φωτογραφία επισκευής ακόμη. Επιβεβαιώστε με:
 `docker compose --env-file .env.production -f docker-compose.prod.yml exec postgres psql -U vacuum_user -d vacuum_traceability -c 'SELECT count(*) FROM "RepairPhoto";'`
 
-**`permission denied` running a `.sh` script**
+**`permission denied` κατά την εκτέλεση script `.sh`**
 `chmod +x scripts/*.sh`
 
-**PowerShell blocks the script**
-Run it as shown in the Task Scheduler section, with
-`-ExecutionPolicy Bypass -File`, rather than changing the machine-wide policy.
+**Το PowerShell μπλοκάρει το script**
+Εκτελέστε το όπως στην ενότητα του Χρονοπρογραμματιστή, με `-ExecutionPolicy Bypass -File`, αντί να αλλάξετε την πολιτική όλου του μηχανήματος.
 
-**Restore fails with "relation already exists"**
-The `--clean --if-exists` flags were omitted. See 7.1.
+**Η επαναφορά αποτυγχάνει με «relation already exists»**
+Παραλείφθηκαν οι παράμετροι `--clean --if-exists`. Δείτε την ενότητα 7.1.

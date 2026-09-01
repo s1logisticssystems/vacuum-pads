@@ -1,118 +1,99 @@
-# Handover — What to Give the Customer
+# Παράδοση — Τι δίνεται στον πελάτη
 
-Checklist for handing this system to the organisation that will run it. Read
-top to bottom before the first delivery; afterwards it is a reference.
+Λίστα ελέγχου για την παράδοση του συστήματος στον οργανισμό που θα το λειτουργεί. Διαβάστε την ολόκληρη πριν την πρώτη παράδοση· στη συνέχεια χρησιμεύει ως σημείο αναφοράς.
 
 ---
 
-## 1. What they receive
+## 1. Τι παραλαμβάνουν
 
-| Item | Where it comes from |
+| Αντικείμενο | Από πού προέρχεται |
 |---|---|
-| Full source code | This Git repository — backend, admin and mobile |
-| Android app | A signed `.apk` you build and hand over directly |
-| Documentation | The `docs/` folder, listed in section 3 |
-| Security dossier | Separate document for their security review |
+| Πλήρης πηγαίος κώδικας | Το αποθετήριο Git — backend, διαχείριση και εφαρμογή Android |
+| Εφαρμογή Android | Υπογεγραμμένο αρχείο `.apk` που παραδίδετε απευθείας |
+| Τεκμηρίωση | Ο φάκελος `docs/`, όπως αναλύεται στην ενότητα 3 |
+| Φάκελος ασφαλείας | Ξεχωριστό έγγραφο, για τον έλεγχο ασφαλείας τους |
 
-Nothing else is required. The system is self-hosted and has no external service
-dependencies.
-
----
-
-## 2. Order of installation
-
-1. They clone the repository onto the server that will run it.
-2. They copy `.env.production.example` to `.env.production` and replace every
-   `CHANGE_ME` value, including `JWT_SECRET`.
-3. They start the stack (`docker compose -f docker-compose.prod.yml ...`).
-4. They create the first administrator with the `set-password` script.
-5. They put a reverse proxy in front of it for HTTPS.
-6. They install the APK on the operators' devices and point it at their server.
-
-Steps 2-4 are covered in the README, step 4 in detail in `USER_MANAGEMENT.md`.
+Δεν απαιτείται τίποτε άλλο. Το σύστημα εγκαθίσταται εξ ολοκλήρου στις δικές τους υποδομές και δεν εξαρτάται από καμία εξωτερική υπηρεσία.
 
 ---
 
-## 3. Documents to hand over
+## 2. Σειρά εγκατάστασης
 
-Give all of these. Each answers a question the customer will otherwise ask.
+1. Κλωνοποιούν το αποθετήριο στον διακομιστή που θα το φιλοξενεί.
+2. Αντιγράφουν το `.env.production.example` σε `.env.production` και αντικαθιστούν **κάθε** τιμή `CHANGE_ME`, συμπεριλαμβανομένου του `JWT_SECRET`.
+3. Ξεκινούν τις υπηρεσίες (`docker compose -f docker-compose.prod.yml ...`).
+4. Δημιουργούν τον πρώτο διαχειριστή με το script `set-password`.
+5. Τοποθετούν reverse proxy μπροστά από το σύστημα για HTTPS.
+6. Εγκαθιστούν το APK στις συσκευές των χειριστών και το στρέφουν στον διακομιστή τους.
 
-| Document | Audience | Answers |
+Τα βήματα 2 έως 4 περιγράφονται στο `README.md`, και το βήμα 4 αναλυτικά στο `USER_MANAGEMENT.md`.
+
+---
+
+## 3. Έγγραφα προς παράδοση
+
+Δώστε τα όλα. Καθένα απαντά σε ερώτηση που διαφορετικά θα σας τεθεί.
+
+| Έγγραφο | Σε ποιον απευθύνεται | Τι απαντά |
 |---|---|---|
-| `README.md` | Whoever installs it | What the system is, how to start it, what the parts are |
-| `docs/USER_MANAGEMENT.md` | System administrator | Creating accounts, resetting passwords, recovering lost access |
-| `docs/BACKUP_AND_RESTORE.md` | IT / operations | What to back up, scheduling, and how to restore |
-| `docs/PRODUCTION_DEPLOYMENT.md` | IT / infrastructure | Deployment, updates, rollback |
-| `docs/ARCHITECTURE.md` | Technical reviewer | How the parts fit together |
-| Security dossier | Security / compliance | Technologies, network exposure, findings and their status |
-| `docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md` | Security / roadmap | What is implemented and what remains optional (MFA, SSO) |
+| `README.md` | Όποιον εγκαθιστά | Τι είναι το σύστημα, πώς ξεκινά, από τι αποτελείται |
+| `docs/USER_MANAGEMENT.md` | Διαχειριστή συστήματος | Δημιουργία λογαριασμών, κωδικοί, ανάκτηση πρόσβασης |
+| `docs/BACKUP_AND_RESTORE.md` | IT / Λειτουργίες | Τι κρατάμε αντίγραφο, χρονοπρογραμματισμός, επαναφορά |
+| `docs/PRODUCTION_DEPLOYMENT.md` | IT / Υποδομές | Εγκατάσταση, αναβαθμίσεις, επαναφορά έκδοσης |
+| `docs/ARCHITECTURE.md` | Τεχνικό ελεγκτή | Πώς συνδέονται μεταξύ τους τα μέρη |
+| Φάκελος ασφαλείας | Ασφάλεια / Κανονιστική συμμόρφωση | Τεχνολογίες, δικτυακή έκθεση, ευρήματα και κατάστασή τους |
+| `docs/AUTHENTICATION_AND_AUTHORIZATION_PLAN.md` | Ασφάλεια | Τι έχει υλοποιηθεί και τι παραμένει προαιρετικό (MFA, SSO) |
 
-The two most likely to be asked for on day one are `USER_MANAGEMENT.md` (they
-cannot sign in without it) and `BACKUP_AND_RESTORE.md` (their IT policy will
-require it).
+Τα δύο που θα ζητηθούν πιθανότατα την πρώτη κιόλας μέρα είναι το `USER_MANAGEMENT.md` (χωρίς αυτό δεν μπορούν να συνδεθούν) και το `BACKUP_AND_RESTORE.md` (θα το απαιτήσει η πολιτική του τμήματος πληροφορικής τους).
 
 ---
 
-## 4. What they must provide
+## 4. Τι πρέπει να παρέχουν οι ίδιοι
 
-State these explicitly at handover so there is no surprise later.
+Δηλώστε τα ρητά κατά την παράδοση, ώστε να μην προκύψει παρεξήγηση αργότερα.
 
-- **A host with Docker.** Linux server or Docker Desktop.
-- **HTTPS.** The application does not terminate TLS; a reverse proxy must.
-- **Secret storage.** `.env.production` holds the database password and
-  `JWT_SECRET`. It belongs in their secret management, not in the repository.
-- **A backup schedule.** The scripts exist; running them is their policy.
-- **Account policy.** Who gets the administrator role.
+- **Διακομιστή με Docker.** Είτε Linux server είτε Docker Desktop.
+- **HTTPS.** Η εφαρμογή δεν τερματίζει η ίδια το TLS· αυτό είναι δουλειά του reverse proxy.
+- **Ασφαλή φύλαξη μυστικών.** Το `.env.production` περιέχει τον κωδικό της βάσης και το `JWT_SECRET`. Ανήκει στο σύστημα διαχείρισης μυστικών τους, όχι στο αποθετήριο.
+- **Πρόγραμμα αντιγράφων ασφαλείας.** Τα scripts υπάρχουν· η εκτέλεσή τους είναι δική τους πολιτική.
+- **Πολιτική λογαριασμών.** Ποιος λαμβάνει ρόλο διαχειριστή.
 
 ---
 
-## 5. Android app distribution
+## 5. Διανομή της εφαρμογής Android
 
-The app does **not** have to go through Google Play. Direct installation of a
-signed APK is a normal enterprise arrangement, and updates work the same way:
-hand over a new APK, the device installs it over the old one, and data and
-settings are kept.
+Η εφαρμογή **δεν** χρειάζεται να περάσει από το Google Play. Η απευθείας εγκατάσταση υπογεγραμμένου APK είναι συνηθισμένη πρακτική για εταιρικά εργαλεία, και οι αναβαθμίσεις λειτουργούν με τον ίδιο τρόπο: παραδίδετε νέο APK, η συσκευή το εγκαθιστά πάνω από το παλιό, και τα δεδομένα και οι ρυθμίσεις διατηρούνται.
 
-The condition is that every build is signed with the **same keystore**. Android
-refuses to install an update signed with a different key, and the only way out
-is to uninstall first, which loses the user's settings.
+Ο όρος είναι ότι **κάθε έκδοση υπογράφεται με το ίδιο keystore**. Το Android αρνείται να εγκαταστήσει ενημέρωση υπογεγραμμένη με διαφορετικό κλειδί, και η μόνη διέξοδος είναι η απεγκατάσταση, που χάνει τις ρυθμίσεις του χρήστη.
 
-Practical consequences:
+Πρακτικές συνέπειες:
 
-- Keep the keystore and its password somewhere they cannot be lost. Losing them
-  means never being able to update this app again — a new key requires a fresh
-  install on every device.
-- Do not commit them. `.gitignore` already excludes `*.jks`, `*.keystore` and
-  `key.properties`.
-- Build releases on one machine, or copy the keystore between machines
-  deliberately.
+- Φυλάξτε το keystore και τον κωδικό του σε σημείο που δεν κινδυνεύουν να χαθούν. **Αν χαθούν, δεν θα μπορείτε ποτέ ξανά να αναβαθμίσετε αυτή την εφαρμογή** — ένα νέο κλειδί απαιτεί καθαρή εγκατάσταση σε κάθε συσκευή.
+- Μην τα καταχωρίσετε ποτέ στο αποθετήριο. Το `.gitignore` ήδη εξαιρεί τα `*.jks`, `*.keystore` και `key.properties`.
+- Χτίζετε τις εκδόσεις σε έναν υπολογιστή, ή μεταφέρετε το keystore συνειδητά όπου χρειάζεται.
 
-Google Play only becomes relevant if they want public listing, automatic
-updates or Play's integrity checks. For an internal tool on company devices,
-direct APK distribution or their MDM is the usual choice.
+Το Google Play αποκτά νόημα μόνο αν θέλετε δημόσια καταχώριση, αυτόματες ενημερώσεις ή τους ελέγχους ακεραιότητας του Play. Για εσωτερικό εργαλείο σε εταιρικές συσκευές, η απευθείας διανομή APK ή το MDM τους είναι η συνήθης επιλογή.
 
-### Which APK to hand over
+### Ποιο APK να παραδώσετε
 
-Builds are produced per processor architecture, so each file is far smaller
-than a combined one:
+Οι εκδόσεις παράγονται ανά αρχιτεκτονική επεξεργαστή, οπότε κάθε αρχείο είναι πολύ μικρότερο από ένα ενιαίο:
 
-| File | For |
+| Αρχείο | Για ποιον |
 |---|---|
-| `app-arm64-v8a-release.apk` | Every current Android phone — **hand over this one** |
-| `app-armeabi-v7a-release.apk` | Older 32-bit devices |
-| `app-x86_64-release.apk` | Emulators, x86 tablets |
+| `app-arm64-v8a-release.apk` | Όλα τα σύγχρονα κινητά — **αυτό παραδίδετε** |
+| `app-armeabi-v7a-release.apk` | Παλαιότερες συσκευές 32 bit |
+| `app-x86_64-release.apk` | Εξομοιωτές, tablet με επεξεργαστή x86 |
 
-If unsure about a device, `app-release.apk` contains all three and installs
-anywhere, at roughly triple the size.
+Αν δεν είστε βέβαιοι για κάποια συσκευή, το `app-release.apk` περιέχει και τις τρεις αρχιτεκτονικές και εγκαθίσταται παντού, με περίπου τριπλάσιο μέγεθος.
 
 ---
 
-## 6. Before the first handover
+## 6. Πριν την πρώτη παράδοση
 
-- [ ] A release keystore exists and is backed up somewhere durable.
-- [ ] The APK is signed with it, not with the debug key.
-- [ ] `.env.production` on their server has no `CHANGE_ME` values left.
-- [ ] The first administrator account works.
-- [ ] A backup has been taken **and restored** once, to prove it works.
-- [ ] HTTPS is in front of both the admin site and the API.
-- [ ] They know where the documents are.
+- [ ] Υπάρχει keystore έκδοσης και έχει κρατηθεί αντίγραφό του σε ασφαλές σημείο.
+- [ ] Το APK είναι υπογεγραμμένο με αυτό, όχι με το κλειδί ανάπτυξης.
+- [ ] Στο `.env.production` του διακομιστή τους δεν έχει μείνει καμία τιμή `CHANGE_ME`.
+- [ ] Ο πρώτος λογαριασμός διαχειριστή λειτουργεί.
+- [ ] Έχει ληφθεί αντίγραφο ασφαλείας **και έχει δοκιμαστεί η επαναφορά του** τουλάχιστον μία φορά.
+- [ ] Υπάρχει HTTPS μπροστά από τη σελίδα διαχείρισης και το API.
+- [ ] Γνωρίζουν πού βρίσκονται τα έγγραφα.
